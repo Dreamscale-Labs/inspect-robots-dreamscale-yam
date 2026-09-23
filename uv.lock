@@ -928,7 +928,7 @@ wheels = [
 
 [[package]]
 name = "inspect-robots-dreamscale-yam"
-version = "0.1.19"
+version = "0.1.20"
 source = { editable = "." }
 dependencies = [
     { name = "dreamscale", extra = ["dreamzero"] },
@@ -957,7 +957,7 @@ requires-dist = [
     { name = "i2rt", marker = "extra == 'hardware'", git = "https://github.com/i2rt-robotics/i2rt.git?rev=ac096928d6899ddf852a71c5e8fbaa6055cd9745" },
     { name = "inspect-robots", git = "https://github.com/robocurve/inspect-robots.git?rev=d748ed9bebf74e660e9daf319475e57d70d10f23" },
     { name = "inspect-robots-dreamscale", specifier = "==0.1.18" },
-    { name = "inspect-robots-yam", extras = ["collision"], git = "https://github.com/Dreamscale-Labs/inspect-robots-yam.git?rev=7e53ebdf34550d5c2b184a162b78f2e1cd7f259d" },
+    { name = "inspect-robots-yam", extras = ["collision"], git = "https://github.com/Dreamscale-Labs/inspect-robots-yam.git?rev=95cb6deaa70636cb45864bfbea29226811447c83" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.15" },
     { name = "numpy", specifier = ">=2.0,<2.5" },
     { name = "pyrealsense2", marker = "sys_platform == 'linux' and extra == 'hardware'", specifier = ">=2.50" },
@@ -970,8 +970,8 @@ provides-extras = ["hardware", "dev"]
 
 [[package]]
 name = "inspect-robots-yam"
-version = "0.33.0+dreamscale.4"
-source = { git = "https://github.com/Dreamscale-Labs/inspect-robots-yam.git?rev=7e53ebdf34550d5c2b184a162b78f2e1cd7f259d#7e53ebdf34550d5c2b184a162b78f2e1cd7f259d" }
+version = "0.33.0+dreamscale.5"
+source = { git = "https://github.com/Dreamscale-Labs/inspect-robots-yam.git?rev=95cb6deaa70636cb45864bfbea29226811447c83#95cb6deaa70636cb45864bfbea29226811447c83" }
 dependencies = [
     { name = "inspect-robots" },
     { name = "json-numpy" },

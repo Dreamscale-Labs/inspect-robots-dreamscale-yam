@@ -1,5 +1,10 @@
 # DreamZero-YAM through Dreamscale
 
+> **New setups:** run DreamZero-YAM as a policy plugin in your own Inspect Robots install. See the
+> [quickstart](https://github.com/Dreamscale-Labs/inspect-robots-dreamscale/blob/v0.2.0/docs/quickstart.md)
+> for `inspect-robots-dreamscale` v0.2.0, which works with stock `inspect-robots` 0.59 and
+> `inspect-robots-yam` 0.36. This repository keeps working for rigs already set up with it.
+
 This public composition is the attended, fail-closed path for running DreamZero-YAM through
 Dreamscale on a bimanual I2RT YAM rig. It is deliberately detachable from Dreamscale core: YAM
 hardware behavior lives in Dreamscale's YAM fork, the generic policy bridge remains in

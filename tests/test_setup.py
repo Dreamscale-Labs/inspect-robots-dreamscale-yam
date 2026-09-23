@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pytest
@@ -868,3 +869,45 @@ def test_a_second_ctrl_c_while_closing_still_closes_the_cameras() -> None:
 
     _close_preview(Broken(), output.append)
     assert output[-1] == "The camera preview did not close cleanly (server gone)."
+
+
+@pytest.mark.parametrize("signame", ["SIGINT", "SIGTERM", "SIGHUP"])
+def test_preview_stops_cleanly_on_any_stop_signal_even_if_sigint_was_ignored(
+    signame: str,
+) -> None:
+    import os
+    import signal
+
+    from dreamscale_yam.setup_command import _stop_on_signals
+
+    signum = getattr(signal, signame)
+    before = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    original = signal.getsignal(signum)
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            with _stop_on_signals():
+                os.kill(os.getpid(), signum)
+                time.sleep(1)
+        assert signal.getsignal(signum) == original
+    finally:
+        signal.signal(signal.SIGINT, before)
+
+
+def test_camera_preview_command_closes_on_sigterm(isolated_paths: Path) -> None:
+    import os
+    import signal
+
+    events: list[str] = []
+    preview = FakePreview(events)
+    deps = SetupDependencies(
+        discover_cameras=lambda: list(CANDIDATES),
+        output=lambda _line: None,
+        start_preview=lambda candidates, _out: preview,
+    )
+
+    def terminated() -> None:
+        os.kill(os.getpid(), signal.SIGTERM)
+        time.sleep(1)
+
+    assert camera_preview_command(deps=deps, wait=terminated) == 0
+    assert preview.closed == 1

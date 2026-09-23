@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import re
+import signal
 import time
 from collections import defaultdict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -417,6 +419,35 @@ def _setup_path(
             output(str(exc))
 
 
+@contextlib.contextmanager
+def _stop_on_signals() -> Iterator[None]:
+    """Turn Ctrl-C, SIGTERM and a closed terminal into KeyboardInterrupt.
+
+    While the preview holds cameras, every way of stopping the command must
+    reach the ``finally`` that closes them, including a SIGINT that a parent
+    process left ignored.
+    """
+    previous: dict[int, Any] = {}
+
+    def stop(_signum: int, _frame: Any) -> None:
+        raise KeyboardInterrupt
+
+    for name in ("SIGINT", "SIGTERM", "SIGHUP"):
+        signum = getattr(signal, name, None)
+        if signum is None:
+            continue
+        try:
+            previous[signum] = signal.signal(signum, stop)
+        except (ValueError, OSError):  # not the main thread
+            continue
+    try:
+        yield
+    finally:
+        for signum, handler in previous.items():
+            with contextlib.suppress(ValueError, OSError):
+                signal.signal(signum, handler)
+
+
 def _close_preview(preview: PreviewHandle, output: Callable[[str], None]) -> None:
     """Close the preview; a second Ctrl-C while cameras close does not skip their release."""
     interrupted = False
@@ -446,15 +477,25 @@ def _assign_cameras(
     """Ask for the top, left and right cameras, with a live preview when possible."""
     sources = [candidate.source for candidate in candidates]
     labels = {candidate.source: candidate.menu_label() for candidate in candidates}
-    preview: PreviewHandle | None = None
-    if interactive:
-        try:
-            preview = deps.start_preview(candidates, deps.output)
-        except Exception as exc:
-            reason = " ".join(str(exc).split()) or type(exc).__name__
-            deps.output(
-                f"Camera preview is unavailable ({reason}); choose from the list below."
-            )
+    with _stop_on_signals():
+        preview: PreviewHandle | None = None
+        if interactive:
+            try:
+                preview = deps.start_preview(candidates, deps.output)
+            except Exception as exc:
+                reason = " ".join(str(exc).split()) or type(exc).__name__
+                deps.output(
+                    f"Camera preview is unavailable ({reason}); choose from the list below."
+                )
+        return _ask_cameras(sources, labels, preview, deps)
+
+
+def _ask_cameras(
+    sources: list[str],
+    labels: Mapping[str, str],
+    preview: PreviewHandle | None,
+    deps: SetupDependencies,
+) -> tuple[str, str, str]:
     try:
         used: set[str] = set()
         chosen: list[str] = []
@@ -694,12 +735,13 @@ def camera_preview_command(
                 "--json to Dreamscale",
             ) from exc
         deps.output("Press Ctrl-C to stop the preview. No configuration is changed.")
-        try:
-            (wait or _wait_forever)()
-        except KeyboardInterrupt:
-            deps.output("")
-        finally:
-            _close_preview(preview, deps.output)
+        with _stop_on_signals():
+            try:
+                (wait or _wait_forever)()
+            except KeyboardInterrupt:
+                deps.output("")
+            finally:
+                _close_preview(preview, deps.output)
     deps.output("Camera preview stopped; every camera is closed.")
     return 0
 

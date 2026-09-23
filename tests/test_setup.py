@@ -830,3 +830,41 @@ def test_menu_names_come_from_usb_product_or_card_name(tmp_path: Path, monkeypat
     assert setup_command._display_model(
         [{"source": "/dev/v4l/by-id/x", "model": "046d:085e"}]
     ) == "USB camera 046d:085e"
+
+
+def test_a_second_ctrl_c_while_closing_still_closes_the_cameras() -> None:
+    from dreamscale_yam.setup_command import _close_preview
+
+    output: list[str] = []
+
+    class Interrupted:
+        calls = 0
+
+        def close(self, timeout_s: float = 20.0) -> bool:
+            self.calls += 1
+            if self.calls == 1:
+                raise KeyboardInterrupt
+            return False
+
+    preview = Interrupted()
+    _close_preview(preview, output.append)
+
+    assert preview.calls == 2
+    assert output == [
+        "Closing the cameras; one moment.",
+        "A preview camera is still closing; it will be released when setup exits.",
+    ]
+
+    class Stubborn:
+        def close(self, timeout_s: float = 20.0) -> bool:
+            raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        _close_preview(Stubborn(), output.append)
+
+    class Broken:
+        def close(self, timeout_s: float = 20.0) -> bool:
+            raise RuntimeError("server gone")
+
+    _close_preview(Broken(), output.append)
+    assert output[-1] == "The camera preview did not close cleanly (server gone)."

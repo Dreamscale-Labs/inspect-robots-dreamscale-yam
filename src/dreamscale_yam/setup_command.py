@@ -418,11 +418,21 @@ def _setup_path(
 
 
 def _close_preview(preview: PreviewHandle, output: Callable[[str], None]) -> None:
-    try:
-        closed = preview.close()
-    except Exception as exc:
-        output(f"The camera preview did not close cleanly ({exc}).")
-        return
+    """Close the preview; a second Ctrl-C while cameras close does not skip their release."""
+    interrupted = False
+    while True:
+        try:
+            closed = preview.close()
+        except KeyboardInterrupt:
+            if interrupted:
+                raise
+            interrupted = True
+            output("Closing the cameras; one moment.")
+            continue
+        except Exception as exc:
+            output(f"The camera preview did not close cleanly ({exc}).")
+            return
+        break
     if not closed:
         output("A preview camera is still closing; it will be released when setup exits.")
 

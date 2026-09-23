@@ -21,6 +21,7 @@ from typing import Any, Literal
 from dreamscale.config import load_config
 from dreamscale.control import ControlPlaneClient
 
+from dreamscale_yam.can_identity import CanResolution, describe_can_id, resolve_can_channels
 from dreamscale_yam.config import (
     I2RT_JOINT_HIGH,
     I2RT_JOINT_LOW,
@@ -268,6 +269,7 @@ class DoctorDependencies:
     camera_probe: Callable[[RigConfig], CameraProbe] = _camera_probe
     cadence_probe: Callable[[RigConfig], tuple[float, float, float]] = _cadence_probe
     can_probe: Callable[[str], tuple[bool, str]] = _can_probe
+    can_resolver: Callable[[RigConfig], CanResolution] = resolve_can_channels
     cloud_probe: Callable[[], CloudProbe] = _cloud_probe
     now: Callable[[], float] = time.time
 
@@ -390,6 +392,46 @@ def _camera_checks(rig: RigConfig, deps: DoctorDependencies) -> list[Diagnostic]
     return checks
 
 
+def _can_check(rig: RigConfig, deps: DoctorDependencies) -> Diagnostic:
+    """Resolve saved adapter identities to current names, then require both UP."""
+    try:
+        resolution = deps.can_resolver(rig)
+    except Exception as exc:
+        return _fail(
+            "DBY-CAN",
+            f"The arm CAN adapters could not be identified: {exc}",
+            "Check `ip -details link show type can`, then rerun doctor",
+        )
+    if not resolution.ok:
+        return _fail("DBY-CAN", "; ".join(resolution.problems), resolution.remediation)
+    can_details: dict[str, str] = {}
+    can_ok = True
+    for channel in (resolution.left_channel, resolution.right_channel):
+        ok, detail = deps.can_probe(channel)
+        can_ok &= ok
+        can_details[channel] = detail
+    if not can_ok:
+        return _fail(
+            "DBY-CAN",
+            f"At least one arm CAN connection is not UP: {can_details}",
+            "Connect both CAN adapters, bring the configured interfaces UP, confirm them with "
+            "`ip -details link show type can`, then rerun doctor",
+        )
+    summary = "both SocketCAN interfaces are UP"
+    if rig.left_can_id is not None or rig.right_can_id is not None:
+        summary += (
+            f" (left arm = {resolution.left_channel}, right arm = {resolution.right_channel}, "
+            "found by adapter identity"
+        )
+        summary += f"; {'; '.join(resolution.notes)})" if resolution.notes else ")"
+        can_details = {
+            **can_details,
+            "left_can_id": describe_can_id(rig.left_can_id),
+            "right_can_id": describe_can_id(rig.right_can_id),
+        }
+    return _pass("DBY-CAN", summary, can_details)
+
+
 def doctor(rig: RigConfig, *, deps: DoctorDependencies | None = None) -> DoctorReport:
     deps = deps or DoctorDependencies()
     checks: list[Diagnostic] = []
@@ -431,22 +473,7 @@ def doctor(rig: RigConfig, *, deps: DoctorDependencies | None = None) -> DoctorR
     )
     checks.extend(_camera_checks(rig, deps))
 
-    can_details: dict[str, str] = {}
-    can_ok = True
-    for channel in (rig.left_channel, rig.right_channel):
-        ok, detail = deps.can_probe(channel)
-        can_ok &= ok
-        can_details[channel] = detail
-    checks.append(
-        _pass("DBY-CAN", "both SocketCAN interfaces are UP", can_details)
-        if can_ok
-        else _fail(
-            "DBY-CAN",
-            f"At least one arm CAN connection is not UP: {can_details}",
-            "Connect both CAN adapters, bring the configured interfaces UP, confirm them with "
-            "`ip -details link show type can`, then rerun doctor",
-        )
-    )
+    checks.append(_can_check(rig, deps))
 
     bounds_ok = rig.joint_low == I2RT_JOINT_LOW and rig.joint_high == I2RT_JOINT_HIGH
     checks.append(

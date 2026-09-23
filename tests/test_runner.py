@@ -647,3 +647,96 @@ def test_run_passes_requested_warm_hold_to_policy_and_cleanup(
     ) == 0
     assert requested == {"policy": 300, "cleanup": 300}
     assert any("5 minutes" in line and "warm" in line.lower() for line in output)
+
+
+def _identified(rig):
+    return rig.with_can_assignment(
+        left_channel="can0",
+        right_channel="can1",
+        left_can_id="usb-serial:LEFT",
+        right_can_id="usb-serial:RIGHT",
+    )
+
+
+def test_run_drives_the_arm_found_by_adapter_identity_after_a_name_swap(
+    rig, isolated_paths: Path, tmp_path: Path, monkeypatch
+) -> None:
+    from dreamscale_yam.can_identity import CanInterface
+
+    identified = _identified(rig)
+    monkeypatch.setattr(
+        "dreamscale_yam.can_identity.read_can_interfaces",
+        lambda: {
+            "can0": CanInterface("can0", True, usb_serial="RIGHT"),
+            "can1": CanInterface("can1", True, usb_serial="LEFT"),
+        },
+    )
+    lock = tmp_path / "composition.lock.toml"
+    lock.write_text("commit='one'\n")
+    embodiment = FakeEmbodiment()
+    policy = FakePolicy()
+    opened: list[dict[str, object]] = []
+    output: list[str] = []
+    deps = RunDependencies(
+        doctor=lambda _rig: _ok_report(),
+        confirm=lambda _prompt: True,
+        embodiment=lambda hardware: (opened.append(hardware.yam_kwargs()), embodiment)[1],
+        policy=lambda _rig, **_kwargs: policy,
+        evaluate=lambda *_args, **_kwargs: [SimpleNamespace(status="success")],
+        cleanup=lambda session_id, **_kwargs: CleanupResult(
+            session_id, disappeared=True, forced=False
+        ),
+        output=output.append,
+        loading=lambda _message: contextlib.nullcontext(),
+    )
+
+    assert run("Pack container", identified, deps=deps, lock_path=lock, warm_minutes=0) == 0
+
+    assert (opened[0]["left_channel"], opened[0]["right_channel"]) == ("can1", "can0")
+    assert any("found by adapter identity" in line for line in output)
+    # The receipt is keyed by adapter identity, so the saved rig and the
+    # renamed hardware rig share one shadow.
+    assert _shadow_passed(configuration_digest(identified, lock))
+    assert _shadow_passed(configuration_digest(identified.with_channels("can1", "can0"), lock))
+
+
+def test_run_refuses_before_hardware_when_an_identified_adapter_is_missing(
+    rig, isolated_paths: Path, tmp_path: Path, monkeypatch
+) -> None:
+    from dreamscale_yam.can_identity import CanInterface
+
+    monkeypatch.setattr(
+        "dreamscale_yam.can_identity.read_can_interfaces",
+        lambda: {"can1": CanInterface("can1", True, usb_serial="RIGHT")},
+    )
+    output: list[str] = []
+    deps = RunDependencies(
+        doctor=lambda _rig: _ok_report(),
+        confirm=lambda _prompt: (_ for _ in ()).throw(AssertionError("prompted")),
+        embodiment=lambda _rig: (_ for _ in ()).throw(AssertionError("hardware opened")),
+        policy=lambda _rig, **_kwargs: (_ for _ in ()).throw(AssertionError("session opened")),
+        evaluate=lambda *_args, **_kwargs: None,
+        cleanup=lambda _session_id, **_kwargs: CleanupResult(None, True, False),
+        output=output.append,
+    )
+
+    assert run("Pack container", _identified(rig), deps=deps, lock_path=tmp_path / "x") == 2
+    assert output[0] == "Error: The LEFT arm's CAN adapter (USB serial LEFT) is not connected."
+    assert "identify-can" in output[1]
+
+
+def test_run_passes_a_rig_without_identity_through_unchanged(rig, tmp_path: Path) -> None:
+    seen: list[object] = []
+    deps = RunDependencies(
+        doctor=lambda _rig: _ok_report(),
+        confirm=lambda _prompt: False,
+        embodiment=lambda _rig: (_ for _ in ()).throw(AssertionError("hardware opened")),
+        policy=lambda _rig, **_kwargs: None,
+        evaluate=lambda *_args, **_kwargs: None,
+        cleanup=lambda _session_id, **_kwargs: CleanupResult(None, True, False),
+        output=lambda _line: None,
+        resolve_can=lambda configured: (seen.append(configured), configured)[1],
+    )
+
+    assert run("Pack container", rig, deps=deps, lock_path=tmp_path / "x") == 2
+    assert seen == [rig]

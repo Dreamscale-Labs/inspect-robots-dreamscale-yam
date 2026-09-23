@@ -24,10 +24,11 @@ from inspect_robots.task import Task
 from inspect_robots.types import Action, Observation
 from inspect_robots_yam.packing import DIM_LABELS
 
+from dreamscale_yam.can_identity import resolve_rig_can
 from dreamscale_yam.config import RigConfig, state_home
 from dreamscale_yam.doctor import DoctorReport
 from dreamscale_yam.doctor import doctor as run_doctor
-from dreamscale_yam.errors import emit_error
+from dreamscale_yam.errors import UserFacingError, emit_error
 from dreamscale_yam.projection import ProjectionAudit, ProjectionEvent, YamProjectionApprover
 
 
@@ -36,10 +37,14 @@ def default_lock_path() -> Path:
 
 
 def configuration_digest(rig: RigConfig, lock_path: Path | None = None) -> str:
-    """Hash every material deployment, device, cadence and safety input."""
+    """Hash every material deployment, device, cadence and safety input.
+
+    CAN adapters saved by identity hash by that identity rather than by the
+    kernel interface name, so a renamed interface keeps the receipt.
+    """
     lock = lock_path or default_lock_path()
     payload = {
-        "rig": rig.as_dict(),
+        "rig": rig.digest_dict(),
         "composition_lock_sha256": hashlib.sha256(lock.read_bytes()).hexdigest(),
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
@@ -307,6 +312,7 @@ class RunDependencies:
     cleanup: Callable[..., CleanupResult] = cleanup_session
     output: Callable[[str], None] = print
     loading: Callable[[str], contextlib.AbstractContextManager[None]] = _loading_status
+    resolve_can: Callable[[RigConfig], RigConfig] = resolve_rig_can
 
 
 @contextlib.contextmanager
@@ -485,6 +491,28 @@ def run(
             "Repeat the command with --warm=5, or use --warm=0 to disable the warm hold",
         )
         return 2
+    try:
+        # Saved adapter identities name the physical adapters; the kernel may
+        # call them something else now. Everything that touches the CAN bus
+        # uses the current names; the digest keys on the identities.
+        hardware_rig = deps.resolve_can(rig)
+    except (UserFacingError, ValueError) as exc:
+        next_step = (
+            exc.next_step
+            if isinstance(exc, UserFacingError)
+            else "Run ./dreamscale-yam identify-can, then rerun ./dreamscale-yam doctor"
+        )
+        emit_error(deps.output, str(exc), next_step)
+        return 2
+    if (hardware_rig.left_channel, hardware_rig.right_channel) != (
+        rig.left_channel,
+        rig.right_channel,
+    ):
+        deps.output(
+            f"Using left arm CAN {hardware_rig.left_channel} and right arm CAN "
+            f"{hardware_rig.right_channel}, found by adapter identity (saved as "
+            f"{rig.left_channel} and {rig.right_channel})."
+        )
     keep_warm_s = warm_minutes * 60
     if warm_minutes:
         deps.output(
@@ -504,7 +532,7 @@ def run(
     session_id: str | None = None
     exit_code = 0
     try:
-        embodiment = deps.embodiment(rig)
+        embodiment = deps.embodiment(hardware_rig)
         policy = deps.policy(rig, keep_warm_s=keep_warm_s)
         prepared = embodiment.prepare_observation(instruction)
         digest = configuration_digest(rig, lock_path)

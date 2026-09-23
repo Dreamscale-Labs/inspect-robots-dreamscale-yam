@@ -216,3 +216,108 @@ def test_config_home_is_the_dreamscale_directory(
     (tmp_path / ".config" / "dropbear-yam").mkdir(parents=True)
 
     assert config.config_home() == tmp_path / ".config" / "dreamscale-yam"
+
+
+GOLDEN_V0117_DIGEST = "0b6aebcadb50a3f78bb28def4c32b5c28ad89f220a229ecf4b02b3ab253b4fcd"
+
+
+def test_rig_without_can_identity_is_unchanged_in_file_dict_and_digest(
+    isolated_paths: Path, tmp_path: Path
+) -> None:
+    """A rig confirmed before v0.1.21 loads, saves and hashes exactly as before."""
+    from dreamscale_yam.runner import configuration_digest
+
+    fixture = Path(__file__).parent / "fixtures" / "v0.1.17-rig.toml"
+    loaded = load_rig(fixture)
+    lock = tmp_path / "composition.lock.toml"
+    lock.write_text("commit='golden'\n")
+
+    assert loaded.schema_version == 2
+    assert (loaded.left_can_id, loaded.right_can_id) == (None, None)
+    assert "left_can_id" not in loaded.as_dict()
+    assert loaded.digest_dict() == loaded.as_dict()
+    # Computed with the v0.1.20 code for this exact fixture and lock text.
+    assert configuration_digest(loaded, lock) == GOLDEN_V0117_DIGEST
+    copy = tmp_path / "copy.toml"
+    copy.write_bytes(fixture.read_bytes())
+    save_rig(loaded, copy)
+    assert copy.read_bytes() == fixture.read_bytes()
+    assert config.migrate_generated_rig(copy) is False
+    written = save_rig(loaded, tmp_path / "rewritten.toml")
+    assert load_rig(written) == loaded
+    assert "can_id" not in written.read_text(encoding="utf-8")
+
+
+def test_can_identity_round_trips_as_schema_3_with_private_permissions(
+    rig: RigConfig, isolated_paths: Path
+) -> None:
+    identified = rig.with_can_assignment(
+        left_channel="can_follower_l",
+        right_channel="can_follower_r",
+        left_can_id="usb-serial:208137AD45465006",
+        right_can_id="usb-port:1-5.1",
+    )
+
+    path = save_rig(identified)
+    text = path.read_text(encoding="utf-8")
+
+    assert identified.schema_version == 3
+    assert load_rig(path) == identified
+    assert 'left_can_id = "usb-serial:208137AD45465006"' in text
+    assert "schema_version = 3" in text
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert config.migrate_generated_rig(path) is False
+    assert identified.yam_kwargs()["left_channel"] == "can_follower_l"
+    assert identified.collision_left_base_pos == rig.collision_left_base_pos
+    plain = identified.with_can_assignment(
+        left_channel="can0", right_channel="can1", left_can_id=None, right_can_id=None
+    )
+    assert plain.schema_version == 2
+    assert plain == rig
+
+
+@pytest.mark.parametrize(
+    ("changes", "match"),
+    [
+        ({"left_can_id": "usb-serial:A"}, "schema_version 3"),
+        ({"schema_version": 3}, "schema_version 3"),
+        ({"schema_version": 4}, "unsupported rig schema_version"),
+        ({"schema_version": 3, "left_can_id": "serial A"}, "usb-serial:<serial>"),
+        ({"schema_version": 3, "left_can_id": "usb-serial:"}, "usb-serial:<serial>"),
+        (
+            {"schema_version": 3, "left_can_id": "usb-serial:A", "right_can_id": "usb-serial:A"},
+            "two different CAN adapter",
+        ),
+    ],
+)
+def test_can_identity_is_validated(
+    rig: RigConfig, changes: dict[str, object], match: str
+) -> None:
+    with pytest.raises(ValueError, match=match):
+        RigConfig(**{**rig.as_dict(), **changes})
+
+
+def test_digest_keys_on_adapter_identity_not_kernel_name(rig: RigConfig, tmp_path: Path) -> None:
+    from dreamscale_yam.runner import configuration_digest
+
+    lock = tmp_path / "composition.lock.toml"
+    lock.write_text("commit='one'\n")
+    identified = rig.with_can_assignment(
+        left_channel="can0",
+        right_channel="can1",
+        left_can_id="usb-serial:LEFT",
+        right_can_id="usb-serial:RIGHT",
+    )
+    renamed = identified.with_channels("can_follower_l", "can_follower_r")
+    swapped = rig.with_can_assignment(
+        left_channel="can0",
+        right_channel="can1",
+        left_can_id="usb-serial:RIGHT",
+        right_can_id="usb-serial:LEFT",
+    )
+
+    assert configuration_digest(renamed, lock) == configuration_digest(identified, lock)
+    assert configuration_digest(swapped, lock) != configuration_digest(identified, lock)
+    assert configuration_digest(identified, lock) != configuration_digest(rig, lock)
+    assert "left_channel" not in identified.digest_dict()
+    assert identified.digest_dict()["left_can_id"] == "usb-serial:LEFT"

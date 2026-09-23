@@ -27,6 +27,14 @@ I2RT_JOINT_HIGH: tuple[float, ...] = _ARM_HIGH * 2
 STRICT_STEP_LIMITS: tuple[float, ...] = ((0.2,) * 6 + (1.0,)) * 2
 REALSENSE_PREFIX = "realsense:"
 _RIG_PROFILE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+# A CAN adapter identity read from sysfs: the adapter's USB serial, or the USB
+# port path when the adapter has no usable serial. ``#N`` names a channel of a
+# multi-channel adapter. Kernel interface names (can0, can1) can swap across
+# reboots or replugs, so a saved identity is resolved to the current name at use.
+CAN_ID_PATTERN = re.compile(r"(usb-serial|usb-port):(\S+?)(?:#([1-9][0-9]*))?\Z")
+# Rigs whose CAN assignment carries adapter identities use schema 3, so an older
+# release refuses the file with a clear message instead of misreading it.
+SCHEMA_WITH_CAN_IDS = 3
 
 
 def config_home() -> Path:
@@ -118,6 +126,8 @@ class RigConfig:
     collision_left_base_yaw: float | None = None
     collision_right_base_yaw: float | None = None
     collision_table_height: float | None = None
+    left_can_id: str | None = None
+    right_can_id: str | None = None
     schema_version: int = 2
     model_target: str = "dreamzero-yam"
     cam_width: int = 640
@@ -137,8 +147,24 @@ class RigConfig:
     strict_policy_actions: bool = True
 
     def __post_init__(self) -> None:
-        if self.schema_version != 2:
+        if self.schema_version not in (2, SCHEMA_WITH_CAN_IDS):
             raise ValueError("unsupported rig schema_version")
+        can_ids = (self.left_can_id, self.right_can_id)
+        has_can_ids = any(value is not None for value in can_ids)
+        if has_can_ids != (self.schema_version == SCHEMA_WITH_CAN_IDS):
+            raise ValueError(
+                "rig schema_version 3 is required exactly when a CAN adapter identity is saved"
+            )
+        for value in can_ids:
+            if value is not None and (
+                not isinstance(value, str) or not CAN_ID_PATTERN.fullmatch(value)
+            ):
+                raise ValueError(
+                    "each CAN adapter identity must look like usb-serial:<serial> or "
+                    "usb-port:<port>"
+                )
+        if has_can_ids and self.left_can_id == self.right_can_id:
+            raise ValueError("the left and right arms need two different CAN adapter identities")
         if self.model_target != "dreamzero-yam":
             raise ValueError("model_target must be dreamzero-yam")
         if self.control_hz != 30:
@@ -214,7 +240,49 @@ class RigConfig:
             raise ValueError("two distinct CAN role assignments are required")
 
     def as_dict(self) -> dict[str, Any]:
-        return dataclasses.asdict(self)
+        """Return every value; unset CAN identities are omitted, as before they existed."""
+        values = dataclasses.asdict(self)
+        for key in ("left_can_id", "right_can_id"):
+            if values[key] is None:
+                del values[key]
+        return values
+
+    def digest_dict(self) -> dict[str, Any]:
+        """Return the rig values that define one shadow-validated configuration.
+
+        A rig without adapter identities hashes exactly as before this field
+        existed. With an identity, the adapter identity replaces the kernel
+        interface name: the physical adapter wired to each arm is what matters,
+        so a mere rename (can0 now called can1) keeps the shadow receipt.
+        """
+        payload = self.as_dict()
+        for side in ("left", "right"):
+            if f"{side}_can_id" in payload:
+                del payload[f"{side}_channel"]
+        return payload
+
+    def with_can_assignment(
+        self,
+        *,
+        left_channel: str,
+        right_channel: str,
+        left_can_id: str | None,
+        right_can_id: str | None,
+    ) -> RigConfig:
+        """Return this rig with a new CAN assignment and everything else kept."""
+        has_can_ids = left_can_id is not None or right_can_id is not None
+        return dataclasses.replace(
+            self,
+            left_channel=left_channel,
+            right_channel=right_channel,
+            left_can_id=left_can_id,
+            right_can_id=right_can_id,
+            schema_version=SCHEMA_WITH_CAN_IDS if has_can_ids else 2,
+        )
+
+    def with_channels(self, left_channel: str, right_channel: str) -> RigConfig:
+        """Return this rig driving the given current CAN interface names."""
+        return dataclasses.replace(self, left_channel=left_channel, right_channel=right_channel)
 
     def yam_kwargs(self) -> dict[str, Any]:
         """Return only arguments owned by the Dreamscale YAM fork."""
@@ -300,15 +368,18 @@ def migrate_generated_rig(path: Path) -> bool:
     raw = payload.get("rig")
     if not isinstance(raw, dict):
         raise ValueError(f"{path} has no [rig] table")
-    if raw.get("schema_version") == 2:
+    if raw.get("schema_version") in (2, SCHEMA_WITH_CAN_IDS):
         return False
     field_names = {field.name for field in dataclasses.fields(RigConfig)}
-    optional_geometry = {
+    optional_fields = {
         "collision_left_base_pos",
         "collision_right_base_pos",
         "collision_left_base_yaw",
         "collision_right_base_yaw",
         "collision_table_height",
+        # Adapter identities arrived after schema 1, so a v1 file never has them.
+        "left_can_id",
+        "right_can_id",
     }
     variable_fields = {
         "top_camera",
@@ -318,7 +389,7 @@ def migrate_generated_rig(path: Path) -> bool:
         "right_channel",
         "collision_guardrail",
         "collision_table",
-        *optional_geometry,
+        *optional_fields,
     }
     fixed_values = {
         field.name: field.default
@@ -332,7 +403,7 @@ def migrate_generated_rig(path: Path) -> bool:
     }
     if (
         set(payload) != {"rig"}
-        or not (field_names - optional_geometry <= set(raw) <= field_names)
+        or not (field_names - optional_fields <= set(raw) <= field_names)
         or raw.get("schema_version") != 1
         or tuple(raw.get("joint_low", ())) != _LEGACY_XML_JOINT_LOW
         or tuple(raw.get("joint_high", ())) != _LEGACY_XML_JOINT_HIGH

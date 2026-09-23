@@ -10,11 +10,12 @@ from pathlib import Path
 from dreamscale import errors as dreamscale_errors
 from dreamscale.quickstart import run_login
 
-from dreamscale_yam.config import load_rig
+from dreamscale_yam.config import load_rig, resolve_rig_path
 from dreamscale_yam.doctor import create_support_bundle, doctor
 from dreamscale_yam.errors import emit_error, explain_exception
+from dreamscale_yam.rig_lock import hold_rig_locks
 from dreamscale_yam.runner import run
-from dreamscale_yam.setup_command import setup
+from dreamscale_yam.setup_command import camera_preview_command, identify_can, setup
 
 
 def _warm_minutes(value: str) -> int:
@@ -36,6 +37,14 @@ def _parser() -> argparse.ArgumentParser:
     setup_parser.add_argument("--rig", help="named physical rig profile")
     setup_parser.add_argument("--reconfigure", action="store_true")
     subcommands.add_parser("login", help="sign in to Dreamscale for this YAM checkout")
+    subcommands.add_parser(
+        "cameras", help="show a live, numbered preview of every camera (changes nothing)"
+    )
+    identify_parser = subcommands.add_parser(
+        "identify-can",
+        help="re-identify each arm's USB-CAN adapter; keeps cameras and geometry",
+    )
+    identify_parser.add_argument("--rig", help="named physical rig profile")
     doctor_parser = subcommands.add_parser("doctor", help="motion-free, session-free checks")
     doctor_parser.add_argument("--rig", help="named physical rig profile")
     doctor_parser.add_argument("--json", action="store_true", dest="json_output")
@@ -88,17 +97,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("Dreamscale login complete. Next run:")
             print("  ./dreamscale-yam doctor")
             return 0
+        if args.command == "cameras":
+            return camera_preview_command()
+        if args.command == "identify-can":
+            identify_can(rig_name=args.rig)
+            return 0
         if args.command == "doctor":
             return _doctor_command(args.json_output, args.support_bundle, args.rig)
         if args.command == "run":
             rig = load_rig(profile=args.rig)
-            return run(
-                args.instruction,
-                rig,
-                max_steps=args.max_steps,
-                warm_minutes=args.warm,
-                log_dir=args.log_dir,
-            )
+            with hold_rig_locks([resolve_rig_path(args.rig)], purpose="run"):
+                return run(
+                    args.instruction,
+                    rig,
+                    max_steps=args.max_steps,
+                    warm_minutes=args.warm,
+                    log_dir=args.log_dir,
+                )
     except dreamscale_errors.DreamscaleError as exc:
         rendered = exc.render().replace("next:  dreamscale login", "next:  ./dreamscale-yam login")
         print(rendered, file=sys.stderr)

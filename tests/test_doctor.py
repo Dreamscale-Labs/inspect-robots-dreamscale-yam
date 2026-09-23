@@ -304,3 +304,75 @@ def test_real_camera_probe_uses_mixed_yam_reader_without_preparing_driver(rig, m
 
     assert probe.shapes == {name: (360, 640, 3) for name in ("top_cam", "left_cam", "right_cam")}
     assert calls == ["constructed", "closed"]
+
+
+def _identified(rig):
+    return rig.with_can_assignment(
+        left_channel="can0",
+        right_channel="can1",
+        left_can_id="usb-serial:LEFT",
+        right_can_id="usb-serial:RIGHT",
+    )
+
+
+def test_doctor_can_uses_current_names_when_saved_names_swapped(rig) -> None:
+    from dreamscale_yam.can_identity import CanInterface, resolve_can_channels
+
+    identified = _identified(rig)
+    probed: list[str] = []
+    deps = _deps(identified)
+    deps.can_probe = lambda channel: (probed.append(channel) or True, f"{channel} is UP")
+    deps.can_resolver = lambda configured: resolve_can_channels(
+        configured,
+        {
+            "can0": CanInterface("can0", True, usb_serial="RIGHT"),
+            "can1": CanInterface("can1", True, usb_serial="LEFT"),
+        },
+    )
+
+    report = doctor(identified, deps=deps)
+    can = next(check for check in report.checks if check.code == "DBY-CAN")
+
+    assert report.ok is True
+    assert can.status == "pass"
+    assert probed == ["can1", "can0"]
+    assert "left arm = can1, right arm = can0" in can.summary
+    assert "is now can1 (saved as can0)" in can.summary
+    assert can.details["left_can_id"] == "USB serial LEFT"
+
+
+def test_doctor_fails_clearly_when_an_identified_adapter_is_missing(rig) -> None:
+    from dreamscale_yam.can_identity import CanInterface, resolve_can_channels
+
+    identified = _identified(rig)
+    deps = _deps(identified)
+    deps.can_probe = lambda _channel: (_ for _ in ()).throw(AssertionError("probed"))
+    deps.can_resolver = lambda configured: resolve_can_channels(
+        configured, {"can1": CanInterface("can1", True, usb_serial="RIGHT")}
+    )
+
+    report = doctor(identified, deps=deps)
+    can = next(check for check in report.checks if check.code == "DBY-CAN")
+
+    assert report.ok is False
+    assert can.status == "fail"
+    assert can.summary == "The LEFT arm's CAN adapter (USB serial LEFT) is not connected"
+    assert "identify-can" in can.remediation
+
+
+def test_doctor_can_summary_is_unchanged_for_rigs_without_identity(rig) -> None:
+    report = doctor(rig, deps=_deps(rig))
+    can = next(check for check in report.checks if check.code == "DBY-CAN")
+
+    assert can.summary == "both SocketCAN interfaces are UP"
+    assert can.details == {"can0": "can0 is UP", "can1": "can1 is UP"}
+
+
+def test_doctor_can_resolver_error_is_a_failure_not_a_crash(rig) -> None:
+    deps = _deps(rig)
+    deps.can_resolver = lambda _rig: (_ for _ in ()).throw(OSError("sysfs unreadable"))
+
+    can = next(check for check in doctor(rig, deps=deps).checks if check.code == "DBY-CAN")
+
+    assert can.status == "fail"
+    assert "sysfs unreadable" in can.summary

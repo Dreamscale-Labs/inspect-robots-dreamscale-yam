@@ -51,6 +51,25 @@ and local run state from `~/.local/state/dropbear-yam` to `~/.local/state/dreams
 never overwrites an existing Dreamscale directory, so the rig interview keeps your confirmed values.
 An existing sign-in keeps working. Use `./dreamscale-yam` from then on.
 
+### Upgrading to v0.1.21: remember each arm's CAN adapter
+
+From an existing checkout, `git pull --ff-only`, `./setup.sh`, then `./dreamscale-yam doctor`. A rig
+confirmed by an earlier release keeps working exactly as before: it still drives the CAN interface
+names it saved, and its shadow receipt stays valid.
+
+Kernel names such as `can0` and `can1` can swap after a reboot or replug, which would drive the
+wrong arm. To remember each arm by its USB-CAN adapter instead, run once at the rig:
+
+```bash
+./dreamscale-yam identify-can
+./dreamscale-yam doctor
+```
+
+It changes only the CAN part of the confirmed rig; cameras, collision geometry and step limits are
+kept. The first run afterwards records one new shadow; later renames do not. The saved file then
+uses rig `schema_version = 3`, which v0.1.20 and older refuse with a clear message, so do not go
+back to an older checkout with that rig file.
+
 `setup.sh` is safe to rerun. It installs missing Debian/Ubuntu build prerequisites only after one
 explicit sudo confirmation, installs `uv` when absent, reproduces `uv.lock`, and launches the rig
 interview. The first rig is automatically stored as `default`; Jay does not name it or
@@ -74,10 +93,45 @@ identical cameras with ambiguous or empty serials.
 The interview asks only for facts software cannot safely infer:
 
 - which detected stable camera source is top, left and right;
-- which SocketCAN interface controls the left and right arm;
+- which USB-CAN adapter controls the left and right arm;
 - whether to enable optional predictive collision checking; if yes, it first shows that you will
   need measured left/right arm-base `(x, y, z)` and yaw plus table-top `z` in one shared frame; and
 - Dreamscale login, but only when credentials are absent.
+
+Each camera is listed with its model and serial when known, plus its stable source, for example
+`2. Intel RealSense D405 · serial 261022277065 · realsense:261022277065`. Before the first camera
+question, setup starts a small camera preview page and prints its links:
+
+```text
+Camera preview: open a link below in a browser and match each numbered picture to the numbered list.
+  http://localhost:41873/Wq3...Zt/   (on this computer)
+  http://10.0.0.243:41873/Wq3...Zt/   (from another computer, enp1s0)
+```
+
+Open either link (the second one works from a laptop on the same network while you are SSH'd in).
+Each numbered tile shows a live picture from the camera with the same number in the list, and is
+marked `assigned: top`, `left` or `right` as you answer. A camera that another program is using
+shows `unavailable` with the reason. The link contains a random token; nothing else is served. The
+page stops and every camera is closed as soon as the third camera is chosen, and also on an error or
+Ctrl-C. If the page cannot start, setup prints one line and the numbered list works as before.
+
+For the arms, setup identifies each USB-CAN adapter by watching which one disappears when you unplug
+it:
+
+1. `Unplug the USB-CAN adapter of the LEFT arm (leave the RIGHT one plugged in).` Setup continues on
+   its own once it sees the adapter disappear; you do not press Enter.
+2. `Plug it back in now.` Setup waits for the same adapter to return, even under a different name.
+   If it comes back DOWN, setup prints the exact command,
+   `sudo ip link set <interface> up type can bitrate 1000000`, and offers to run it after a `y/N`
+   question.
+3. With two adapters, the other one is the RIGHT arm; with more, setup repeats step 1 for the RIGHT
+   arm. It then shows `left arm = … (USB serial …), right arm = …` and asks you to confirm.
+
+Nothing is sent to the arms during this step. If you are not at the rig, type `list` and press Enter
+at the first unplug prompt to pick the interfaces from a numbered list instead. Either way setup
+remembers each adapter by its USB serial, or by its USB port when it has no serial; an adapter with
+neither is remembered by name with a warning. Doctor and run resolve the saved adapters to their
+current interface names every time, and refuse with a clear message if one is missing.
 
 If you answer `n` to collision geometry, those measurements are omitted. The run still enforces
 the pinned joint bounds, finite 14-value actions and per-action movement limits. Every finite target
@@ -93,6 +147,17 @@ rig, give only that additional rig a name:
 ```bash
 ./dreamscale-yam setup --rig jay-rig-2
 ```
+
+Two more commands help at the rig without changing the robot:
+
+```bash
+./dreamscale-yam cameras        # the same numbered camera preview; changes no configuration
+./dreamscale-yam identify-can   # re-identify only the arms' CAN adapters (add --rig NAME if needed)
+```
+
+`cameras` runs until Ctrl-C and then closes every camera. `identify-can` updates only the CAN part
+of an existing confirmed rig and keeps cameras, collision geometry and step limits. Both refuse
+while `run` is using a rig, and `run` refuses while either of them is open.
 
 With one configured rig, the short commands above remain unambiguous. Once multiple profiles are
 configured, name the physical rig on every command so the program never guesses:
@@ -123,6 +188,12 @@ Camera-source checks accept RealSense serials plus stable `/dev/v4l/by-id` and
 change on replug. Doctor opens the same mixed camera-reader composition used by the live run, but
 never calls hardware preparation or reset, so the motor driver and gripper calibration remain
 behind the later physical-motion gate.
+
+For a rig with saved CAN adapters, `DBY-CAN` first finds each adapter by its USB serial or port and
+checks the interface it is attached to now. It passes and names the current interfaces when they
+differ from the saved names, and fails with the next step when an adapter is not connected (for
+example `The LEFT arm's CAN adapter (USB serial 208137AD45465006) is not connected`). The left and
+right arms can never resolve to the same interface.
 
 Doctor reports the measured cross-camera timestamp spread for observability. A spread above 50 ms
 is a non-blocking warning, not an inference or motion rejection. The required camera contract is
@@ -176,7 +247,10 @@ stop-all operation.
 
 Shadow evidence is stored under `~/.local/state/dreamscale-yam/shadow/`. Any change to the locked
 package commits, model target, camera/CAN mapping, rig geometry, cadence, joint bounds or step
-limits changes the digest and requires a new shadow. Shadow validates integration only; it is not a
+limits changes the digest and requires a new shadow. When the rig remembers its CAN adapters, the
+digest uses those adapter identities rather than the kernel interface names, so a rename such as
+`can0` becoming `can1` keeps the receipt while swapping which adapter drives which arm does not.
+The run always drives the interface each saved adapter is attached to now. Shadow validates integration only; it is not a
 physical-safety or task-success claim. The strict YAM validator remains active as the
 hardware-facing backstop on every action.
 

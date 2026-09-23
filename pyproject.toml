@@ -3,16 +3,16 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "inspect-robots-dropbear-yam"
-version = "0.1.18"
-description = "Attended DreamZero-YAM via Dropbear for a bimanual I2RT YAM rig"
+name = "inspect-robots-dreamscale-yam"
+version = "0.1.19"
+description = "Attended DreamZero-YAM via Dreamscale for a bimanual I2RT YAM rig"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
 license = "Apache-2.0"
 dependencies = [
-  "dropbear[dreamzero]==0.1.0a14",
+  "dreamscale[dreamzero]==0.1.0a26",
   "inspect-robots @ git+https://github.com/robocurve/inspect-robots.git@d748ed9bebf74e660e9daf319475e57d70d10f23",
-  "inspect-robots-dropbear @ git+https://github.com/Dreamscale-Labs/inspect-robots-dropbear.git@b9195841bfcb0843b7c3812319f790be2c0c19f4",
+  "inspect-robots-dreamscale==0.1.18",
   "inspect-robots-yam[collision] @ git+https://github.com/Dreamscale-Labs/inspect-robots-yam.git@7e53ebdf34550d5c2b184a162b78f2e1cd7f259d",
   "numpy>=2.0,<2.5",
   "tomli-w>=1.2,<2",
@@ -26,10 +26,10 @@ hardware = [
 dev = ["pytest>=8.3", "pytest-cov>=6", "ruff>=0.11", "mypy>=1.15"]
 
 [project.scripts]
-dropbear-yam = "dropbear_yam.cli:main"
+dreamscale-yam = "dreamscale_yam.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/dropbear_yam"]
+packages = ["src/dreamscale_yam"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -49,7 +49,7 @@ select = ["E", "F", "I", "UP", "B", "ASYNC"]
 strict = true
 
 [[tool.mypy.overrides]]
-module = ["dropbear.*", "inspect_robots_dropbear.*", "pyrealsense2"]
+module = ["dreamscale.*", "inspect_robots_dreamscale.*", "pyrealsense2"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

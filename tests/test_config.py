@@ -8,8 +8,8 @@ from inspect_robots.errors import SafetyAbort
 from inspect_robots.types import Action
 from inspect_robots_yam import YamConfig, YAMEmbodiment
 
-import dropbear_yam.config as config
-from dropbear_yam.config import (
+import dreamscale_yam.config as config
+from dreamscale_yam.config import (
     I2RT_JOINT_HIGH,
     I2RT_JOINT_LOW,
     RigConfig,
@@ -205,3 +205,14 @@ def test_named_profiles_are_isolated_and_ambiguous_implicit_selection_fails(
 def test_named_profile_cannot_escape_config_home(profile: str, isolated_paths: Path) -> None:
     with pytest.raises(ValueError, match="rig profile"):
         config.rig_path(profile)
+
+
+def test_config_home_is_the_dreamscale_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Catch the runtime reading a pre-rename directory; setup.sh moves it once."""
+    monkeypatch.delenv("DREAMSCALE_YAM_CONFIG_HOME", raising=False)
+    monkeypatch.setattr(config.Path, "home", classmethod(lambda _cls: tmp_path))
+    (tmp_path / ".config" / "dropbear-yam").mkdir(parents=True)
+
+    assert config.config_home() == tmp_path / ".config" / "dreamscale-yam"

@@ -1,4 +1,4 @@
-"""The single user-facing dropbear-yam command."""
+"""The single user-facing dreamscale-yam command."""
 
 from __future__ import annotations
 
@@ -7,14 +7,14 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from dropbear import errors as dropbear_errors
-from dropbear.quickstart import run_login
+from dreamscale import errors as dreamscale_errors
+from dreamscale.quickstart import run_login
 
-from dropbear_yam.config import load_rig
-from dropbear_yam.doctor import create_support_bundle, doctor
-from dropbear_yam.errors import emit_error, explain_exception
-from dropbear_yam.runner import run
-from dropbear_yam.setup_command import setup
+from dreamscale_yam.config import load_rig
+from dreamscale_yam.doctor import create_support_bundle, doctor
+from dreamscale_yam.errors import emit_error, explain_exception
+from dreamscale_yam.runner import run
+from dreamscale_yam.setup_command import setup
 
 
 def _warm_minutes(value: str) -> int:
@@ -28,14 +28,14 @@ def _warm_minutes(value: str) -> int:
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="dropbear-yam")
+    parser = argparse.ArgumentParser(prog="dreamscale-yam")
     subcommands = parser.add_subparsers(dest="command", required=True)
     setup_parser = subcommands.add_parser(
         "setup", help="confirm devices, optional collision geometry and login"
     )
     setup_parser.add_argument("--rig", help="named physical rig profile")
     setup_parser.add_argument("--reconfigure", action="store_true")
-    subcommands.add_parser("login", help="sign in to Dropbear for this YAM checkout")
+    subcommands.add_parser("login", help="sign in to Dreamscale for this YAM checkout")
     doctor_parser = subcommands.add_parser("doctor", help="motion-free, session-free checks")
     doctor_parser.add_argument("--rig", help="named physical rig profile")
     doctor_parser.add_argument("--json", action="store_true", dest="json_output")
@@ -85,8 +85,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if args.command == "login":
             run_login(print_next_steps=False)
-            print("Dropbear login complete. Next run:")
-            print("  ./dropbear-yam doctor")
+            print("Dreamscale login complete. Next run:")
+            print("  ./dreamscale-yam doctor")
             return 0
         if args.command == "doctor":
             return _doctor_command(args.json_output, args.support_bundle, args.rig)
@@ -99,15 +99,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                 warm_minutes=args.warm,
                 log_dir=args.log_dir,
             )
-    except dropbear_errors.DropbearError as exc:
-        rendered = exc.render().replace("next:  dropbear login", "next:  ./dropbear-yam login")
+    except dreamscale_errors.DreamscaleError as exc:
+        rendered = exc.render().replace("next:  dreamscale login", "next:  ./dreamscale-yam login")
         print(rendered, file=sys.stderr)
         if args.command == "setup":
             print(
                 "YAM rig configuration is saved; you will not need to choose devices again.",
                 file=sys.stderr,
             )
-            print("Next: Run ./dropbear-yam login, then ./dropbear-yam doctor.", file=sys.stderr)
+            print(
+                "Next: Run ./dreamscale-yam login, then ./dreamscale-yam doctor.",
+                file=sys.stderr,
+            )
         return 2
     except (OSError, ValueError, RuntimeError) as exc:
         message, next_step = explain_exception(exc)

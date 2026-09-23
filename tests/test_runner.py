@@ -12,8 +12,8 @@ from inspect_robots.approver import ChainApprover
 from inspect_robots.scene import Scene
 from inspect_robots.types import Action, ActionChunk, Observation
 
-from dropbear_yam.doctor import DoctorReport
-from dropbear_yam.runner import (
+from dreamscale_yam.doctor import DoctorReport
+from dreamscale_yam.runner import (
     CleanupResult,
     NonRewritingApprover,
     RunDependencies,
@@ -88,7 +88,7 @@ class FakePolicy:
         self.act_calls += 1
         assert observation.extra["env_step"] == 0
         return ActionChunk(
-            actions=[Action(np.zeros(14), {"dropbear_action_source": "hold"})],
+            actions=[Action(np.zeros(14), {"dreamscale_action_source": "hold"})],
             control_hz=30,
         )
 
@@ -97,7 +97,7 @@ class FakePolicy:
         self.predicted_observations.append(observation)
         assert instruction
         assert observation.extra["env_step"] == 0
-        return Action(self.predicted_action.copy(), {"dropbear_action_source": "model"})
+        return Action(self.predicted_action.copy(), {"dreamscale_action_source": "model"})
 
     def close(self) -> None:
         self.closed = True
@@ -178,7 +178,7 @@ def test_shadow_inference_is_validated_never_executed_and_session_is_reused(
     assert receipt["projected_dimensions"] == ["left_j0"]
     assert receipt["requested_action_sha256"] != receipt["applied_action_sha256"]
     assert receipt["executed"] is False
-    assert loading == ["Starting Dropbear compute (a cold start can take a few minutes)"]
+    assert loading == ["Starting Dreamscale compute (a cold start can take a few minutes)"]
 
 
 def test_v1_shadow_receipt_is_invalidated(isolated_paths: Path) -> None:
@@ -328,12 +328,12 @@ def test_connect_confirmation_is_yes_no_with_yes_as_default(monkeypatch, capsys)
 
 
 def test_loading_status_immediately_shows_symbol_and_elapsed_seconds(capsys) -> None:
-    with _loading_status("Starting Dropbear compute"):
+    with _loading_status("Starting Dreamscale compute"):
         pass
 
     output = capsys.readouterr().out
-    assert "⠋ Starting Dropbear compute — 0s waiting" in output
-    assert "Starting Dropbear compute ready after 0s" in output
+    assert "⠋ Starting Dreamscale compute — 0s waiting" in output
+    assert "Starting Dreamscale compute ready after 0s" in output
 
 
 def test_collision_approver_is_optional_but_action_validation_remains_strict(rig) -> None:
@@ -561,10 +561,10 @@ def test_cleanup_deletes_only_the_exact_owned_session(monkeypatch) -> None:
 
     client = Client()
     monkeypatch.setattr(
-        "dropbear_yam.runner.load_config",
+        "dreamscale_yam.runner.load_config",
         lambda: SimpleNamespace(api_key="hidden", control_plane_url="https://example.invalid"),
     )
-    monkeypatch.setattr("dropbear_yam.runner.ControlPlaneClient", lambda *_args: client)
+    monkeypatch.setattr("dreamscale_yam.runner.ControlPlaneClient", lambda *_args: client)
 
     result = asyncio.run(_cleanup_async("session-owned", grace_s=0.001, poll_s=0))
 
@@ -595,10 +595,10 @@ def test_warm_cleanup_waits_for_exact_session_to_park_without_deleting(monkeypat
 
     client = Client()
     monkeypatch.setattr(
-        "dropbear_yam.runner.load_config",
+        "dreamscale_yam.runner.load_config",
         lambda: SimpleNamespace(api_key="hidden", control_plane_url="https://example.invalid"),
     )
-    monkeypatch.setattr("dropbear_yam.runner.ControlPlaneClient", lambda *_args: client)
+    monkeypatch.setattr("dreamscale_yam.runner.ControlPlaneClient", lambda *_args: client)
 
     result = asyncio.run(_cleanup_async("session-owned", keep_warm_s=300, grace_s=1, poll_s=0))
 

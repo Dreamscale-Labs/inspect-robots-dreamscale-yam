@@ -87,13 +87,31 @@ if [[ ! -x "$uv_bin" ]]; then
     "Open a new terminal and rerun ./setup.sh; if it repeats, send this message to Dreamscale."
 fi
 
+# BEGIN one-time rename move
+# A rig set up before the rename keeps its confirmed config and local state:
+# move each old directory to its Dreamscale name once. Never overwrite.
+for rename_pair in \
+  ".config/dropbear-yam:.config/dreamscale-yam" \
+  ".local/state/dropbear-yam:.local/state/dreamscale-yam"; do
+  rename_old="${HOME}/${rename_pair%%:*}"
+  rename_new="${HOME}/${rename_pair##*:}"
+  if [[ -d "$rename_old" && ! -e "$rename_new" ]]; then
+    mkdir -p "$(dirname -- "$rename_new")"
+    mv -- "$rename_old" "$rename_new"
+    echo "Moved $rename_old to $rename_new."
+  elif [[ -d "$rename_old" ]]; then
+    echo "Kept $rename_new; $rename_old was left untouched. Remove it once you no longer need it."
+  fi
+done
+# END one-time rename move
+
 if ! "$uv_bin" sync --project "$repo_dir" --python 3.12 --locked --extra hardware; then
   fail \
-    "The locked Dropbear-YAM Python environment could not be installed." \
+    "The locked Dreamscale-YAM Python environment could not be installed." \
     "Check the error above and internet access, then rerun ./setup.sh."
 fi
 set +e
-"$uv_bin" run --project "$repo_dir" --python 3.12 --locked --extra hardware dropbear-yam setup
+"$uv_bin" run --project "$repo_dir" --python 3.12 --locked --extra hardware dreamscale-yam setup
 setup_status=$?
 set -e
 if (( setup_status != 0 )); then
@@ -102,4 +120,4 @@ fi
 
 echo
 echo "Setup complete. Next run:"
-echo "  $repo_dir/dropbear-yam doctor"
+echo "  $repo_dir/dreamscale-yam doctor"

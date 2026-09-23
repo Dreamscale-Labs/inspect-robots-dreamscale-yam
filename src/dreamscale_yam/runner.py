@@ -16,19 +16,19 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from dropbear.config import load_config
-from dropbear.control import ControlPlaneClient
+from dreamscale.config import load_config
+from dreamscale.control import ControlPlaneClient
 from inspect_robots.approver import Approver, ChainApprover
 from inspect_robots.scene import Scene
 from inspect_robots.task import Task
 from inspect_robots.types import Action, Observation
 from inspect_robots_yam.packing import DIM_LABELS
 
-from dropbear_yam.config import RigConfig, state_home
-from dropbear_yam.doctor import DoctorReport
-from dropbear_yam.doctor import doctor as run_doctor
-from dropbear_yam.errors import emit_error
-from dropbear_yam.projection import ProjectionAudit, ProjectionEvent, YamProjectionApprover
+from dreamscale_yam.config import RigConfig, state_home
+from dreamscale_yam.doctor import DoctorReport
+from dreamscale_yam.doctor import doctor as run_doctor
+from dreamscale_yam.errors import emit_error
+from dreamscale_yam.projection import ProjectionAudit, ProjectionEvent, YamProjectionApprover
 
 
 def default_lock_path() -> Path:
@@ -93,7 +93,7 @@ def _record_shadow(
         "requested_action_sha256": _action_sha256(requested),
         "applied_action_sha256": _action_sha256(applied),
         "projected_dimensions": projected,
-        "action_source": requested.meta.get("dropbear_action_source"),
+        "action_source": requested.meta.get("dreamscale_action_source"),
         "executed": False,
     }
     temporary = path.with_suffix(".json.tmp")
@@ -253,7 +253,7 @@ def _loading_status(message: str) -> Iterator[None]:
             frame += 1
             stopped.wait(0.1)
 
-    thread = threading.Thread(target=render, name="dropbear-yam-loading", daemon=True)
+    thread = threading.Thread(target=render, name="dreamscale-yam-loading", daemon=True)
     if interactive:
         thread.start()
     failed = False
@@ -282,9 +282,9 @@ def _embodiment(rig: RigConfig) -> Any:
 
 
 def _policy(rig: RigConfig, *, keep_warm_s: int) -> Any:
-    from inspect_robots_dropbear.policy import DropbearPolicy
+    from inspect_robots_dreamscale.policy import DreamscalePolicy
 
-    return DropbearPolicy(
+    return DreamscalePolicy(
         model=rig.model_target,
         control_hz=rig.control_hz,
         keep_warm_s=keep_warm_s,
@@ -372,7 +372,7 @@ def _run_shadow(
         _shadow_observation(observation),
         instruction=instruction,
     )
-    if requested.meta.get("dropbear_action_source") != "model":
+    if requested.meta.get("dreamscale_action_source") != "model":
         raise RuntimeError("shadow inference did not return a model action")
     reference = observation.state.get("joint_pos")
     if reference is None:
@@ -422,18 +422,18 @@ def _failure_next_step(detail: str) -> str:
     ):
         return (
             "Keep the robot stopped, check the scene and safety configuration, review the run "
-            "log under ~/.local/state/dropbear-yam/logs, and only start a new run when the cause "
+            "log under ~/.local/state/dreamscale-yam/logs, and only start a new run when the cause "
             "is understood"
         )
     if "camera" in lowered or "image" in lowered:
         return (
             "Check camera power and USB connections, close other camera programs, then rerun "
-            "./dropbear-yam doctor"
+            "./dreamscale-yam doctor"
         )
     return (
-        "Review the run log under ~/.local/state/dropbear-yam/logs, then run ./dropbear-yam "
-        "doctor; if it passes and this repeats, run ./dropbear-yam doctor --support-bundle "
-        "~/dropbear-yam-support.tar.gz and send that file to Dreamscale"
+        "Review the run log under ~/.local/state/dreamscale-yam/logs, then run ./dreamscale-yam "
+        "doctor; if it passes and this repeats, run ./dreamscale-yam doctor --support-bundle "
+        "~/dreamscale-yam-support.tar.gz and send that file to Dreamscale"
     )
 
 
@@ -457,14 +457,14 @@ def run(
                 deps.output(f"  [{check.code}] {check.summary}")
                 if check.remediation:
                     deps.output(f"    Next: {check.remediation}")
-        deps.output("Next: Fix the failed checks above, then rerun ./dropbear-yam doctor.")
+        deps.output("Next: Fix the failed checks above, then rerun ./dreamscale-yam doctor.")
         return 2
     if not instruction.strip():
         emit_error(
             deps.output,
             "The task instruction is empty",
             "Repeat the command with a trained task, for example "
-            './dropbear-yam run "Pack container"',
+            './dreamscale-yam run "Pack container"',
         )
         return 2
     if max_steps < 1:
@@ -488,7 +488,7 @@ def run(
     keep_warm_s = warm_minutes * 60
     if warm_minutes:
         deps.output(
-            f"After this run, Dropbear compute will stay warm for up to {warm_minutes} "
+            f"After this run, Dreamscale compute will stay warm for up to {warm_minutes} "
             f"minute{'s' if warm_minutes != 1 else ''}; the warm hold remains billable."
         )
     if not deps.confirm(
@@ -516,7 +516,7 @@ def run(
         approver = _action_approver(embodiment, rig, audit=projection_audit.record)
         if not _shadow_passed(digest):
             deps.output("Running one non-commanding shadow inference for this configuration.")
-            with deps.loading("Starting Dropbear compute (a cold start can take a few minutes)"):
+            with deps.loading("Starting Dreamscale compute (a cold start can take a few minutes)"):
                 policy.prepare()
                 # Starting a cold worker may take minutes. Reacquire all camera
                 # frames and joint state only after it is ready so the shadow
@@ -526,7 +526,7 @@ def run(
             deps.output(f"Shadow validation passed: {shadow_path(digest)}")
         else:
             deps.output("Shadow validation already passed for this exact configuration.")
-            with deps.loading("Starting Dropbear compute (a cold start can take a few minutes)"):
+            with deps.loading("Starting Dreamscale compute (a cold start can take a few minutes)"):
                 policy.prepare()
 
         task = Task(
@@ -560,11 +560,11 @@ def run(
                     deps.output,
                     "Inspect Robots reported that the task did not finish successfully",
                     "Keep the robot stopped, review the run log under "
-                    "~/.local/state/dropbear-yam/logs, then rerun doctor before another attempt",
+                    "~/.local/state/dreamscale-yam/logs, then rerun doctor before another attempt",
                 )
             exit_code = 1
     except KeyboardInterrupt:
-        deps.output("Operator stop received. Closing the YAM hardware and Dropbear session.")
+        deps.output("Operator stop received. Closing the YAM hardware and Dreamscale session.")
         exit_code = 130
     except BaseException as exc:
         next_step = _failure_next_step(str(exc))
@@ -579,7 +579,7 @@ def run(
             try:
                 resource.close()
             except BaseException as exc:
-                name = "YAM hardware" if label == "embodiment" else "Dropbear connection"
+                name = "YAM hardware" if label == "embodiment" else "Dreamscale connection"
                 emit_error(
                     deps.output,
                     f"The {name} did not close cleanly: {exc}",
@@ -592,24 +592,24 @@ def run(
         except BaseException as exc:
             emit_error(
                 deps.output,
-                f"Could not verify that Dropbear session {session_id or 'unknown'} ended: {exc}",
+                f"Could not verify that Dreamscale session {session_id or 'unknown'} ended: {exc}",
                 "Do not start another run; rerun doctor and contact Dreamscale if it lists "
                 "a session",
             )
             exit_code = exit_code or 1
         else:
             if session_id is None:
-                deps.output("Dropbear cleanup verified: no session was created.")
+                deps.output("Dreamscale cleanup verified: no session was created.")
             elif keep_warm_s > 0 and cleanup.parked and not cleanup.forced:
                 deps.output(
-                    f"Dropbear compute is warm for up to {warm_minutes} "
+                    f"Dreamscale compute is warm for up to {warm_minutes} "
                     f"minute{'s' if warm_minutes != 1 else ''}: {session_id}"
                 )
-                deps.output(f"To stop it now: dropbear sessions stop {session_id}")
+                deps.output(f"To stop it now: dreamscale sessions stop {session_id}")
             elif keep_warm_s > 0 and cleanup.disappeared and not cleanup.forced:
                 emit_error(
                     deps.output,
-                    f"Dropbear session {session_id} ended instead of staying warm: "
+                    f"Dreamscale session {session_id} ended instead of staying warm: "
                     f"{cleanup.detail}",
                     "The robot is closed. A later run may cold-start; send a support bundle to "
                     "Dreamscale if this repeats",
@@ -618,7 +618,7 @@ def run(
             elif not cleanup.disappeared:
                 emit_error(
                     deps.output,
-                    f"Dropbear session {session_id or 'unknown'} is still present: "
+                    f"Dreamscale session {session_id or 'unknown'} is still present: "
                     f"{cleanup.detail}",
                     "Do not start another run; rerun doctor and contact Dreamscale to stop this "
                     "exact session",
@@ -627,14 +627,14 @@ def run(
             elif cleanup.forced:
                 emit_error(
                     deps.output,
-                    f"Dropbear session {session_id or 'unknown'} needed an explicit stop: "
+                    f"Dreamscale session {session_id or 'unknown'} needed an explicit stop: "
                     f"{cleanup.detail}",
                     "Rerun doctor before another run and send a support bundle to Dreamscale if "
                     "this happens again",
                 )
                 exit_code = exit_code or 1
             else:
-                deps.output(f"Dropbear cleanup verified for {session_id or 'no session'}")
+                deps.output(f"Dreamscale cleanup verified for {session_id or 'no session'}")
         if projection_audit is not None:
             projection_audit.summarize()
     return exit_code

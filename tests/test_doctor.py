@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from dropbear_yam.doctor import (
+from dreamscale_yam.doctor import (
     CameraProbe,
     CloudProbe,
     DoctorDependencies,
@@ -103,8 +103,8 @@ def test_doctor_auth_failure_uses_the_locked_composition_login_command(rig) -> N
     auth = next(check for check in report.checks if check.code == "DBY-AUTH")
 
     assert auth.status == "fail"
-    assert "./dropbear-yam login" in auth.remediation
-    assert "`dropbear login`" not in auth.remediation
+    assert "./dreamscale-yam login" in auth.remediation
+    assert "`dreamscale login`" not in auth.remediation
 
 
 def test_doctor_allows_one_owned_parked_yam_reservation(rig) -> None:
@@ -146,10 +146,10 @@ def test_cloud_probe_separates_one_reclaimable_yam_reservation(monkeypatch) -> N
             return None
 
     monkeypatch.setattr(
-        "dropbear_yam.doctor.load_config",
+        "dreamscale_yam.doctor.load_config",
         lambda: type("Config", (), {"api_key": "hidden", "control_plane_url": "url"})(),
     )
-    monkeypatch.setattr("dropbear_yam.doctor.ControlPlaneClient", Client)
+    monkeypatch.setattr("dreamscale_yam.doctor.ControlPlaneClient", Client)
 
     probe = asyncio.run(_cloud_probe_async())
 
@@ -198,7 +198,7 @@ def test_doctor_rejects_stale_future_missing_and_wrong_shape_camera_data(rig) ->
 
 
 def test_doctor_accepts_distinct_stable_mixed_camera_sources(rig) -> None:
-    from dropbear_yam.config import RigConfig
+    from dreamscale_yam.config import RigConfig
 
     mixed = RigConfig(
         **{
@@ -217,7 +217,7 @@ def test_doctor_accepts_distinct_stable_mixed_camera_sources(rig) -> None:
 
 
 def test_doctor_warns_but_does_not_block_when_collision_geometry_was_skipped(rig) -> None:
-    from dropbear_yam.config import RigConfig
+    from dreamscale_yam.config import RigConfig
 
     without_geometry = RigConfig(
         **{
@@ -252,7 +252,7 @@ def test_doctor_reports_default_action_projection_limits(rig) -> None:
 
 
 def test_doctor_warns_without_blocking_when_projection_limits_exceed_defaults(rig) -> None:
-    from dropbear_yam.config import RigConfig
+    from dreamscale_yam.config import RigConfig
 
     relaxed = RigConfig(**{**rig.as_dict(), "step_limits": (0.5,) * 14})
     report = doctor(relaxed, deps=_deps(relaxed))
@@ -267,7 +267,7 @@ def test_doctor_warns_without_blocking_when_projection_limits_exceed_defaults(ri
 def test_real_camera_probe_uses_mixed_yam_reader_without_preparing_driver(rig, monkeypatch) -> None:
     import numpy as np
 
-    from dropbear_yam.config import RigConfig
+    from dreamscale_yam.config import RigConfig
 
     calls: list[str] = []
     now = time.time()

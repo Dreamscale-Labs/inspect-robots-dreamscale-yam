@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from dropbear_yam.config import RigConfig
+from dreamscale_yam.config import RigConfig
 
 
 @pytest.fixture
@@ -27,6 +27,6 @@ def rig() -> RigConfig:
 def isolated_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     config = tmp_path / "config"
     state = tmp_path / "state"
-    monkeypatch.setenv("DROPBEAR_YAM_CONFIG_HOME", str(config))
-    monkeypatch.setenv("DROPBEAR_YAM_STATE_HOME", str(state))
+    monkeypatch.setenv("DREAMSCALE_YAM_CONFIG_HOME", str(config))
+    monkeypatch.setenv("DREAMSCALE_YAM_STATE_HOME", str(state))
     return tmp_path

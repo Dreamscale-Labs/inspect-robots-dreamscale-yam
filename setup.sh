@@ -89,11 +89,11 @@ fi
 
 if ! "$uv_bin" sync --project "$repo_dir" --python 3.12 --locked --extra hardware; then
   fail \
-    "The locked Dropbear-YAM Python environment could not be installed." \
+    "The locked Dreamscale-YAM Python environment could not be installed." \
     "Check the error above and internet access, then rerun ./setup.sh."
 fi
 set +e
-"$uv_bin" run --project "$repo_dir" --python 3.12 --locked --extra hardware dropbear-yam setup
+"$uv_bin" run --project "$repo_dir" --python 3.12 --locked --extra hardware dreamscale-yam setup
 setup_status=$?
 set -e
 if (( setup_status != 0 )); then
@@ -102,4 +102,4 @@ fi
 
 echo
 echo "Setup complete. Next run:"
-echo "  $repo_dir/dropbear-yam doctor"
+echo "  $repo_dir/dreamscale-yam doctor"

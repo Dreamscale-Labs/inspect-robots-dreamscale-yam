@@ -192,7 +192,7 @@ class YamProjectionApprover:
             metadata["clamped"] = True
         if delta.size:
             metadata["delta_clamped"] = True
-        metadata["dropbear_yam_projected"] = True
+        metadata["dreamscale_yam_projected"] = True
         event = ProjectionEvent(
             action_index=action_index,
             reference=tuple(float(value) for value in resolved_reference),

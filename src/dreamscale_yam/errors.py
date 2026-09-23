@@ -49,7 +49,7 @@ def explain_exception(exc: BaseException) -> tuple[str, str]:
             "Repeat the command with --rig NAME using one of the names shown",
         )
     if isinstance(exc, FileExistsError) and "--reconfigure" in text:
-        return text, "Rerun ./dropbear-yam setup --reconfigure only if you want to replace it"
+        return text, "Rerun ./dreamscale-yam setup --reconfigure only if you want to replace it"
     if any(
         phrase in text.lower()
         for phrase in (
@@ -73,12 +73,12 @@ def explain_exception(exc: BaseException) -> tuple[str, str]:
     ):
         return (
             text,
-            "Run ./dropbear-yam setup --reconfigure from this checkout instead of editing the "
+            "Run ./dreamscale-yam setup --reconfigure from this checkout instead of editing the "
             "rig file by hand",
         )
     return (
         text or "The command could not be completed",
-        "Run ./dropbear-yam doctor; if it is still unclear, run "
-        "./dropbear-yam doctor --support-bundle ~/dropbear-yam-support.tar.gz "
+        "Run ./dreamscale-yam doctor; if it is still unclear, run "
+        "./dreamscale-yam doctor --support-bundle ~/dreamscale-yam-support.tar.gz "
         "and send that file to Dreamscale",
     )

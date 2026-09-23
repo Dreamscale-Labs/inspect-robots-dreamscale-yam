@@ -653,10 +653,10 @@ resolution-markers = [
     "python_full_version >= '3.14'",
 ]
 dependencies = [
-    { name = "absl-py", marker = "python_full_version >= '3.14'" },
-    { name = "attrs", marker = "python_full_version >= '3.14'" },
-    { name = "numpy", marker = "python_full_version >= '3.14'" },
-    { name = "wrapt", marker = "python_full_version >= '3.14'" },
+    { name = "absl-py" },
+    { name = "attrs" },
+    { name = "numpy" },
+    { name = "wrapt" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a6/83/ce29720ccf934c6cfa9b9c95ebbe96558386e66886626066632b5e44afed/dm_tree-0.1.9.tar.gz", hash = "sha256:a4c7db3d3935a5a2d5e4b383fc26c6b0cd6f78c6d4605d3e7b518800ecd5342b", size = 35623, upload-time = "2025-01-30T20:45:37.13Z" }
 wheels = [
@@ -687,10 +687,10 @@ resolution-markers = [
     "python_full_version < '3.12'",
 ]
 dependencies = [
-    { name = "absl-py", marker = "python_full_version < '3.14'" },
-    { name = "attrs", marker = "python_full_version < '3.14'" },
-    { name = "numpy", marker = "python_full_version < '3.14'" },
-    { name = "wrapt", marker = "python_full_version < '3.14'" },
+    { name = "absl-py" },
+    { name = "attrs" },
+    { name = "numpy" },
+    { name = "wrapt" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/5a/66/a3ec619d22b6baffa5ab853e8dc6ec9d0c837127948af59bb15b988d7312/dm_tree-0.1.10.tar.gz", hash = "sha256:22f37b599e01cc3402a17f79c257a802aebd8d326de05b54657650845956208a", size = 35748, upload-time = "2026-03-31T17:35:39.03Z" }
 wheels = [
@@ -728,10 +728,11 @@ wheels = [
 ]
 
 [[package]]
-name = "dropbear"
-version = "0.1.0a14"
+name = "dreamscale"
+version = "0.1.0a25"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "click" },
     { name = "dropbear-transport" },
     { name = "httpx" },
     { name = "numpy" },
@@ -741,9 +742,9 @@ dependencies = [
     { name = "typer" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/eb/2e/edeae1e3dea9d7bb5c44c87713dd8eb3a8ba3b8fe9ab2bf1f7a33e615143/dropbear-0.1.0a14.tar.gz", hash = "sha256:8359355d51028ff007e0b72f71f7ea4dc6b4347710c4ecbb28df1e4aaa3c93da", size = 160223, upload-time = "2026-08-29T07:40:03.574Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1f/af/a5dc3c6a0018f286a9e570d5db265d6c9a8f462b1c020487d4b9f35f4761/dreamscale-0.1.0a25.tar.gz", hash = "sha256:3fff4b594798e17405f4127e73484f789f5a1ec7aebdb9a7328bbba2b4750360", size = 239514, upload-time = "2026-09-23T04:01:50.923Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bf/bc/94df8202c9906ba3705a5c8582916245e0f2ab63a3a43c913182d47d8530/dropbear-0.1.0a14-py3-none-any.whl", hash = "sha256:02fbae6a758cbd908ebe3aa369af968254021196bc29c596ec96dbab901d59b1", size = 182296, upload-time = "2026-08-29T07:40:01.868Z" },
+    { url = "https://files.pythonhosted.org/packages/55/87/9b7f7d33996eabaed555386efbed72008051794df5dde05c914a031e0152/dreamscale-0.1.0a25-py3-none-any.whl", hash = "sha256:06389a00606ba933c8b212e400b79a1ccf0e42feba867088560caa050c8a9043", size = 268678, upload-time = "2026-09-23T04:01:49.268Z" },
 ]
 
 [package.optional-dependencies]
@@ -753,7 +754,7 @@ dreamzero = [
 
 [[package]]
 name = "dropbear-transport"
-version = "0.1.1a6"
+version = "0.1.1a9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aioquic" },
@@ -763,9 +764,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/de/66/2a2992c94a154640ab87854e035d2829e159ff29729605ecedc0c6d2deac/dropbear_transport-0.1.1a6.tar.gz", hash = "sha256:ecf5a895a2ba952b4d1b52c591dbf5b2ff2b083b7c2821c1ded91f2262bc9fa8", size = 38800, upload-time = "2026-08-23T08:36:47.21Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e3/1c/d14bc4c66698b84fce9e3b427713b3129a9193dc79ae97e8232c2176cddb/dropbear_transport-0.1.1a9.tar.gz", hash = "sha256:565e65a965e66407aaac58d9f0e3aa44aa563da89cfca372c6800078adb5fd3b", size = 40159, upload-time = "2026-09-23T00:50:17.262Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/38/5f/4f1a5b2d98fddea5506b2eeeeca6c5fa0fd8e62f347d2bad8f5d74502852/dropbear_transport-0.1.1a6-py3-none-any.whl", hash = "sha256:a2511bb0f0e095a217b726d4c243bbefd02e98fda5ba8d536fb4a60b60be9c65", size = 45908, upload-time = "2026-08-23T08:36:45.856Z" },
+    { url = "https://files.pythonhosted.org/packages/97/5e/9c12ac79f9c99485e59d6df7275993219cdc7b2d8c9b044d7ec08de0a8a4/dropbear_transport-0.1.1a9-py3-none-any.whl", hash = "sha256:cd40720a9fc0a44a4d3e7e7d0e4b1eda48db0cb341d7e7d9bb6d6799eb1a9fc8", size = 47336, upload-time = "2026-09-23T00:50:15.956Z" },
 ]
 
 [[package]]
@@ -912,23 +913,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "inspect-robots-dropbear"
-version = "0.1.17"
-source = { git = "https://github.com/Dreamscale-Labs/inspect-robots-dropbear.git?rev=b9195841bfcb0843b7c3812319f790be2c0c19f4#b9195841bfcb0843b7c3812319f790be2c0c19f4" }
+name = "inspect-robots-dreamscale"
+version = "0.1.18"
+source = { git = "https://github.com/Dreamscale-Labs/inspect-robots-dropbear.git?rev=e5adcea777973c49e8866b72a36359c73c2785ee#e5adcea777973c49e8866b72a36359c73c2785ee" }
 dependencies = [
-    { name = "dropbear", extra = ["dreamzero"] },
+    { name = "dreamscale", extra = ["dreamzero"] },
     { name = "inspect-robots" },
     { name = "numpy" },
 ]
 
 [[package]]
-name = "inspect-robots-dropbear-yam"
-version = "0.1.18"
+name = "inspect-robots-dreamscale-yam"
+version = "0.1.19"
 source = { editable = "." }
 dependencies = [
-    { name = "dropbear", extra = ["dreamzero"] },
+    { name = "dreamscale", extra = ["dreamzero"] },
     { name = "inspect-robots" },
-    { name = "inspect-robots-dropbear" },
+    { name = "inspect-robots-dreamscale" },
     { name = "inspect-robots-yam", extra = ["collision"] },
     { name = "numpy" },
     { name = "tomli-w" },
@@ -948,10 +949,10 @@ hardware = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dropbear", extras = ["dreamzero"], specifier = "==0.1.0a14" },
+    { name = "dreamscale", extras = ["dreamzero"], specifier = "==0.1.0a25" },
     { name = "i2rt", marker = "extra == 'hardware'", git = "https://github.com/i2rt-robotics/i2rt.git?rev=ac096928d6899ddf852a71c5e8fbaa6055cd9745" },
     { name = "inspect-robots", git = "https://github.com/robocurve/inspect-robots.git?rev=d748ed9bebf74e660e9daf319475e57d70d10f23" },
-    { name = "inspect-robots-dropbear", git = "https://github.com/Dreamscale-Labs/inspect-robots-dropbear.git?rev=b9195841bfcb0843b7c3812319f790be2c0c19f4" },
+    { name = "inspect-robots-dreamscale", git = "https://github.com/Dreamscale-Labs/inspect-robots-dropbear.git?rev=e5adcea777973c49e8866b72a36359c73c2785ee" },
     { name = "inspect-robots-yam", extras = ["collision"], git = "https://github.com/Dreamscale-Labs/inspect-robots-yam.git?rev=7e53ebdf34550d5c2b184a162b78f2e1cd7f259d" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.15" },
     { name = "numpy", specifier = ">=2.0,<2.5" },
@@ -2070,7 +2071,7 @@ resolution-markers = [
     "python_full_version < '3.12'",
 ]
 dependencies = [
-    { name = "numpy", marker = "python_full_version < '3.12'" },
+    { name = "numpy" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7a/97/5a3609c4f8d58b039179648e62dd220f89864f56f7357f5d4f45c29eb2cc/scipy-1.17.1.tar.gz", hash = "sha256:95d8e012d8cb8816c226aef832200b1d45109ed4464303e997c5b13122b297c0", size = 30573822, upload-time = "2026-02-23T00:26:24.851Z" }
 wheels = [
@@ -2146,7 +2147,7 @@ resolution-markers = [
     "python_full_version == '3.12.*'",
 ]
 dependencies = [
-    { name = "numpy", marker = "python_full_version >= '3.12'" },
+    { name = "numpy" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7e/74/66de6258867beb2ef08f35f9f2ac017a52cacd5081714d239ff1a442d458/scipy-1.18.1.tar.gz", hash = "sha256:52c4b7422442aba924d03ad4019852b08a92e64ea187b933135687bfe2747307", size = 30781235, upload-time = "2026-08-21T23:28:50.599Z" }
 wheels = [

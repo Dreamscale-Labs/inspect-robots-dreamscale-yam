@@ -1,9 +1,9 @@
-# DreamZero-YAM through Dropbear
+# DreamZero-YAM through Dreamscale
 
 This public composition is the attended, fail-closed path for running DreamZero-YAM through
-Dropbear on a bimanual I2RT YAM rig. It is deliberately detachable from Dropbear core: YAM
+Dreamscale on a bimanual I2RT YAM rig. It is deliberately detachable from Dreamscale core: YAM
 hardware behavior lives in Dreamscale's YAM fork, the generic policy bridge remains in
-`inspect-robots-dropbear`, and this repo owns only installation, rig configuration, diagnostics,
+`inspect-robots-dreamscale`, and this repo owns only installation, rig configuration, diagnostics,
 gates and cleanup.
 
 No credentials or rig-specific configuration are stored in this repository.
@@ -14,11 +14,11 @@ On the Linux computer connected to both arms and all three cameras:
 
 ```bash
 git clone --branch stable --depth 1 \
-  https://github.com/Dreamscale-Labs/inspect-robots-dropbear-yam.git
-cd inspect-robots-dropbear-yam
+  https://github.com/Dreamscale-Labs/inspect-robots-dreamscale-yam.git
+cd inspect-robots-dreamscale-yam
 ./setup.sh
-./dropbear-yam doctor
-./dropbear-yam run "Pack container"
+./dreamscale-yam doctor
+./dreamscale-yam run "Pack container"
 ```
 
 `"Pack container"` is an exact in-distribution task from
@@ -40,11 +40,11 @@ interview. The first rig is automatically stored as `default`; Jay does not name
 pass `--rig`. Existing confirmed values are kept. To deliberately replace it:
 
 ```bash
-./dropbear-yam setup --reconfigure
+./dreamscale-yam setup --reconfigure
 ```
 
 If browser sign-in is temporarily unavailable, the confirmed rig remains saved. Retry with
-`./dropbear-yam login`, then run `./dropbear-yam doctor`, without repeating camera or CAN selection.
+`./dreamscale-yam login`, then run `./dreamscale-yam doctor`, without repeating camera or CAN selection.
 
 Camera discovery probes every color-capable V4L2 node; it does not assume that color is
 `video-index0`. It joins V4L2 and librealsense identities when Linux exposes a common USB port or
@@ -60,45 +60,45 @@ The interview asks only for facts software cannot safely infer:
 - which SocketCAN interface controls the left and right arm;
 - whether to enable optional predictive collision checking; if yes, it first shows that you will
   need measured left/right arm-base `(x, y, z)` and yaw plus table-top `z` in one shared frame; and
-- Dropbear login, but only when credentials are absent.
+- Dreamscale login, but only when credentials are absent.
 
 If you answer `n` to collision geometry, those measurements are omitted. The run still enforces
 the pinned joint bounds, finite 14-value actions and per-action movement limits. Every finite target
 is capped to the intersection of those limits and then continues; requested and applied values are
 recorded locally. Malformed actions and hardware failures still stop the run. Without geometry it
 simply cannot predict arm/arm or arm/table contact from a geometric model. You can add geometry
-later with `./dropbear-yam setup --reconfigure`.
+later with `./dreamscale-yam setup --reconfigure`.
 
-It writes `~/.config/dropbear-yam/rigs/default.toml` with permissions `0600`. The file contains no
-API key. Authentication remains in Dropbear's own config. To configure an additional physical
+It writes `~/.config/dreamscale-yam/rigs/default.toml` with permissions `0600`. The file contains no
+API key. Authentication remains in Dreamscale's own config. To configure an additional physical
 rig, give only that additional rig a name:
 
 ```bash
-./dropbear-yam setup --rig jay-rig-2
+./dreamscale-yam setup --rig jay-rig-2
 ```
 
 With one configured rig, the short commands above remain unambiguous. Once multiple profiles are
 configured, name the physical rig on every command so the program never guesses:
 
 ```bash
-./dropbear-yam doctor --rig default
-./dropbear-yam run --rig default "Pack container"
+./dreamscale-yam doctor --rig default
+./dreamscale-yam run --rig default "Pack container"
 ```
 
 ## What doctor proves
 
 ```bash
-./dropbear-yam doctor
-./dropbear-yam doctor --json
-./dropbear-yam doctor --support-bundle ~/dropbear-yam-support.tar.gz
+./dreamscale-yam doctor
+./dreamscale-yam doctor --json
+./dreamscale-yam doctor --support-bundle ~/dreamscale-yam-support.tar.gz
 ```
 
-Doctor performs no robot motion, does not construct the I2RT motor driver, and creates no Dropbear
+Doctor performs no robot motion, does not construct the I2RT motor driver, and creates no Dreamscale
 model session. It checks the exact locked package commits, Linux/build prerequisites,
 authentication, DreamZero-YAM entitlement and target availability, system clock synchronization,
 camera roles/shapes/fresh Unix-epoch timestamps, observed cross-camera skew, CAN state, I2RT model
 limits, the selected collision-checking mode, end-to-end 30 Hz declarations, and the absence of a
-conflicting Dropbear session. Exactly one owned, parked DreamZero-YAM reservation is accepted so
+conflicting Dreamscale session. Exactly one owned, parked DreamZero-YAM reservation is accepted so
 the next run can reclaim it without another cold start.
 
 Camera-source checks accept RealSense serials plus stable `/dev/v4l/by-id` and
@@ -122,13 +122,13 @@ failures.
 must be ready and that connecting will enable I2RT control traffic and calibrate both
 `LINEAR_4310` grippers. Keep hands clear of the grippers.
 
-By default, the exact loaded Dropbear compute stays warm for up to five minutes after the run so a
+By default, the exact loaded Dreamscale compute stays warm for up to five minutes after the run so a
 follow-up run can reclaim it. Warm retention is billed at the full rate. Choose any whole number
 from 0 through 60 minutes:
 
 ```bash
-./dropbear-yam run --warm=15 "Pack container"
-./dropbear-yam run --warm=0 "Pack container"  # terminate immediately after cleanup
+./dreamscale-yam run --warm=15 "Pack container"
+./dreamscale-yam run --warm=0 "Pack container"  # terminate immediately after cleanup
 ```
 
 The terminal prints the exact parked session and its stop command. The reservation expires
@@ -142,7 +142,7 @@ After that confirmation the program:
    action through the same cap-and-continue projection against the measured pre-home state, and
    never executes that action (an expected initial `async_latest` hold cannot satisfy this shadow
    check);
-3. reuses the same hardware connection and, when shadow was needed, the same Dropbear session;
+3. reuses the same hardware connection and, when shadow was needed, the same Dreamscale session;
 4. retains the YAM fork's stand-clear homing prompt and scene-ready prompt;
 5. runs Inspect Robots programmatically with a composition-owned action projection and, when
    configured, predictive collision guards—no interpolation or hold substitution. Every finite
@@ -150,14 +150,14 @@ After that confirmation the program:
    window before collision review. Malformed or non-finite actions, impossible references and
    predicted collisions still abort without sending; and
 6. synchronously closes hardware and policy on success, abort, exception, signal or operator stop,
-   then verifies that the exact owned Dropbear session parked when `--warm` is positive or
+   then verifies that the exact owned Dreamscale session parked when `--warm` is positive or
    disappeared when `--warm=0`.
 
 If the requested park does not finish or ordinary zero-warm close does not remove that exact
 session, the program explicitly stops only that session and exits nonzero. It never uses a
 stop-all operation.
 
-Shadow evidence is stored under `~/.local/state/dropbear-yam/shadow/`. Any change to the locked
+Shadow evidence is stored under `~/.local/state/dreamscale-yam/shadow/`. Any change to the locked
 package commits, model target, camera/CAN mapping, rig geometry, cadence, joint bounds or step
 limits changes the digest and requires a new shadow. Shadow validates integration only; it is not a
 physical-safety or task-success claim. The strict YAM validator remains active as the
@@ -167,7 +167,7 @@ hardware-facing backstop on every action.
 
 The default cap is `0.2` radians for each arm joint and `1.0` normalized stroke for each gripper.
 Most users should keep it. An advanced operator can hand-edit `step_limits` in the confirmed rig
-TOML (normally `~/.config/dropbear-yam/rigs/default.toml`) using this packed order:
+TOML (normally `~/.config/dreamscale-yam/rigs/default.toml`) using this packed order:
 
 ```toml
 step_limits = [
@@ -180,7 +180,7 @@ The values must be 14 finite positive numbers. Doctor reports the effective vect
 does not block—when any value is above the recommended default. A change invalidates the previous
 shadow receipt automatically.
 
-While Dropbear compute is starting, the terminal shows a small loading symbol and elapsed seconds.
+While Dreamscale compute is starting, the terminal shows a small loading symbol and elapsed seconds.
 The default episode cap is `--max-steps 3600`, which is 120 seconds at the fixed 30 Hz action
 timebase. To choose a shorter attended run, pass a smaller positive value explicitly.
 
@@ -197,13 +197,13 @@ Do not proceed without separate authorization for physical motion and inference.
 first short trained task, an operator must stand clear with the e-stop in hand. Acceptance requires
 correct 640x360 camera roles and source times, 30 Hz on both policy and YAM, at least one telemetry
 row whose action source is `model`, no silently changed action, working gates/abort behavior, and
-either a verified exact parked reservation or, with `--warm=0`, absence of the exact Dropbear
+either a verified exact parked reservation or, with `--warm=0`, absence of the exact Dreamscale
 session afterward.
 
-Run logs, frames, actions and adapter telemetry are under `~/.local/state/dropbear-yam/logs/`.
+Run logs, frames, actions and adapter telemetry are under `~/.local/state/dreamscale-yam/logs/`.
 
 ## Locked components
 
 `composition.lock.toml` is the human-readable identity contract and `uv.lock` is the complete
-resolver lock. They pin the Dreamscale YAM fork, generic Dropbear adapter, Dropbear SDK, Inspect
+resolver lock. They pin the Dreamscale YAM fork, generic Dreamscale adapter, Dreamscale SDK, Inspect
 Robots and I2RT. Do not hand-edit installed packages; update the locks and repeat doctor/shadow.

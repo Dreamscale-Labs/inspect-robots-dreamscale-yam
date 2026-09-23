@@ -13,10 +13,10 @@ from inspect_robots_yam.config import YamConfig
 from inspect_robots_yam.embodiment import YAMEmbodiment
 from inspect_robots_yam.operator import OperatorIO
 
-from dropbear_yam.config import load_rig
-from dropbear_yam.doctor import CameraProbe, CloudProbe, DoctorDependencies, doctor
-from dropbear_yam.runner import CleanupResult, RunDependencies, run
-from dropbear_yam.setup_command import SetupDependencies, setup
+from dreamscale_yam.config import load_rig
+from dreamscale_yam.doctor import CameraProbe, CloudProbe, DoctorDependencies, doctor
+from dreamscale_yam.runner import CleanupResult, RunDependencies, run
+from dreamscale_yam.setup_command import SetupDependencies, setup
 
 
 class FakeDriver:
@@ -36,7 +36,7 @@ class FakeDriver:
         self.closed = True
 
 
-class FakeDropbearPolicy:
+class FakeDreamscalePolicy:
     session_id = "fake-owned-session"
 
     def __init__(self) -> None:
@@ -52,7 +52,7 @@ class FakeDropbearPolicy:
         assert instruction
         return Action(
             np.asarray(observation.state["joint_pos"]).copy(),
-            {"dropbear_action_source": "model"},
+            {"dreamscale_action_source": "model"},
         )
 
     def act(self, observation) -> ActionChunk:
@@ -60,7 +60,7 @@ class FakeDropbearPolicy:
             [
                 Action(
                     np.asarray(observation.state["joint_pos"]).copy(),
-                    {"dropbear_action_source": "model"},
+                    {"dreamscale_action_source": "model"},
                 )
             ],
             control_hz=30,
@@ -124,7 +124,7 @@ def test_fake_setup_doctor_shadow_gated_run_and_cleanup(
         poll_end=lambda: True,
         sleep_fn=lambda _delay: None,
     )
-    policy = FakeDropbearPolicy()
+    policy = FakeDreamscalePolicy()
     eval_started_without_shadow_motion: list[bool] = []
     applied_actions: list[Action] = []
     output: list[str] = []
@@ -165,7 +165,7 @@ def test_fake_setup_doctor_shadow_gated_run_and_cleanup(
     assert result == 0, output
     assert eval_started_without_shadow_motion == [True]
     assert applied_actions[0].data[0] == pytest.approx(0.2)
-    assert applied_actions[0].meta["dropbear_yam_projected"] is True
+    assert applied_actions[0].meta["dreamscale_yam_projected"] is True
     assert driver.commands
     assert driver.closed is True
     assert policy.closed is True

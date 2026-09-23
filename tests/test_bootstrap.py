@@ -3,18 +3,18 @@ from __future__ import annotations
 from importlib.metadata import version
 from pathlib import Path
 
-from dropbear_yam import __version__
+from dreamscale_yam import __version__
 
 
 def test_bootstrap_is_locked_and_has_one_explicit_sudo_confirmation() -> None:
     root = Path(__file__).resolve().parents[1]
     setup = (root / "setup.sh").read_text(encoding="utf-8")
-    wrapper = (root / "dropbear-yam").read_text(encoding="utf-8")
+    wrapper = (root / "dreamscale-yam").read_text(encoding="utf-8")
 
     assert setup.count("read -r -p") == 1
     assert "sudo apt-get install" in setup
     assert '"$uv_bin" sync' in setup and "--locked --extra hardware" in setup
-    assert "dropbear-yam setup" in setup
+    assert "dreamscale-yam setup" in setup
     assert "--locked --extra hardware" in wrapper
     assert "api_key" not in setup + wrapper
     assert "Error:" in setup and "Next:" in setup
@@ -33,15 +33,15 @@ def test_readme_uses_the_customer_facing_stable_branch_without_a_rig_flag() -> N
     readme = (root / "README.md").read_text(encoding="utf-8")
 
     assert "git clone --branch stable --depth 1" in readme
-    assert './dropbear-yam doctor\n' in readme
-    assert './dropbear-yam run "Pack container"' in readme
+    assert './dreamscale-yam doctor\n' in readme
+    assert './dreamscale-yam run "Pack container"' in readme
     assert "--max-steps 3600" in readme
     assert "[Y/n]" in readme
     assert "elapsed seconds" in readme
     assert "paid shadow inference" not in readme
-    assert "./dropbear-yam login" in readme
+    assert "./dreamscale-yam login" in readme
     assert "without repeating camera or CAN selection" in readme
 
 
 def test_runtime_version_matches_installed_package_metadata() -> None:
-    assert __version__ == version("inspect-robots-dropbear-yam")
+    assert __version__ == version("inspect-robots-dreamscale-yam")

@@ -18,10 +18,10 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-from dropbear.config import load_config
-from dropbear.control import ControlPlaneClient
+from dreamscale.config import load_config
+from dreamscale.control import ControlPlaneClient
 
-from dropbear_yam.config import (
+from dreamscale_yam.config import (
     I2RT_JOINT_HIGH,
     I2RT_JOINT_LOW,
     STRICT_STEP_LIMITS,
@@ -128,11 +128,11 @@ def _camera_probe(rig: RigConfig) -> CameraProbe:
 
 def _cadence_probe(rig: RigConfig) -> tuple[float, float, float]:
     """Resolve all three public cadence declarations without connecting remotely."""
-    from inspect_robots_dropbear.policy import DropbearPolicy
+    from inspect_robots_dreamscale.policy import DreamscalePolicy
     from inspect_robots_yam.config import YamConfig
 
     yam = YamConfig(**rig.yam_kwargs())
-    policy = DropbearPolicy(control_hz=rig.control_hz, keep_warm_s=0)
+    policy = DreamscalePolicy(control_hz=rig.control_hz, keep_warm_s=0)
     try:
         return float(rig.control_hz), float(yam.control_hz), float(policy.info.control_hz)
     finally:
@@ -163,7 +163,7 @@ def _can_probe(channel: str) -> tuple[bool, str]:
 async def _cloud_probe_async() -> CloudProbe:
     config = load_config()
     if not config.api_key:
-        return CloudProbe(False, False, False, detail="Dropbear API key is absent")
+        return CloudProbe(False, False, False, detail="Dreamscale API key is absent")
     client = ControlPlaneClient(config.control_plane_url, config.api_key)
     try:
         candidates = await client.probe_candidates("dreamzero-yam")
@@ -313,7 +313,7 @@ def _camera_checks(rig: RigConfig, deps: DoctorDependencies) -> list[Diagnostic]
             _fail(
                 "DBY-CAMERA-ROLES",
                 "The top, left and right camera assignments are not three stable devices",
-                "Run ./dropbear-yam setup --reconfigure and assign a different detected camera "
+                "Run ./dreamscale-yam setup --reconfigure and assign a different detected camera "
                 "to each role",
             )
         )
@@ -326,7 +326,7 @@ def _camera_checks(rig: RigConfig, deps: DoctorDependencies) -> list[Diagnostic]
                 "DBY-CAMERA-FRAMES",
                 f"A configured camera could not provide an image: {exc}",
                 "Check camera USB power and permissions, close other camera programs, then "
-                "rerun ./dropbear-yam doctor",
+                "rerun ./dreamscale-yam doctor",
             )
         )
         return checks
@@ -338,7 +338,7 @@ def _camera_checks(rig: RigConfig, deps: DoctorDependencies) -> list[Diagnostic]
             _fail(
                 "DBY-CAMERA-FRAMES",
                 f"The cameras did not all provide 640x360 color images: {probe.shapes}",
-                "Run ./dropbear-yam setup --reconfigure to check the three roles, then "
+                "Run ./dreamscale-yam setup --reconfigure to check the three roles, then "
                 "rerun doctor",
             )
         )
@@ -359,7 +359,7 @@ def _camera_checks(rig: RigConfig, deps: DoctorDependencies) -> list[Diagnostic]
                 "DBY-CAMERA-TIMESTAMPS",
                 reason,
                 "Synchronize the Ubuntu clock, reconnect the cameras, close other camera "
-                "programs, then rerun ./dropbear-yam doctor",
+                "programs, then rerun ./dreamscale-yam doctor",
             )
         )
     else:
@@ -455,7 +455,7 @@ def doctor(rig: RigConfig, *, deps: DoctorDependencies | None = None) -> DoctorR
         else _fail(
             "DBY-JOINT-LIMITS",
             "The configured joint limits do not match this YAM software release",
-            "Run ./dropbear-yam setup --reconfigure from this checkout",
+            "Run ./dreamscale-yam setup --reconfigure from this checkout",
         )
     )
     relaxed_dimensions = [
@@ -513,7 +513,7 @@ def doctor(rig: RigConfig, *, deps: DoctorDependencies | None = None) -> DoctorR
                 "DBY-GEOMETRY",
                 "Predictive collision checking is turned off by configuration",
                 "To add it later, measure both arm-base positions and yaws plus table height, "
-                "then run ./dropbear-yam setup --reconfigure",
+                "then run ./dreamscale-yam setup --reconfigure",
             )
         )
     try:
@@ -530,7 +530,7 @@ def doctor(rig: RigConfig, *, deps: DoctorDependencies | None = None) -> DoctorR
             "DBY-CADENCE",
             f"The rig, YAM driver and model do not all use 30 Hz: {cadence_detail}",
             "Run `uv sync --locked --extra hardware`, then run "
-            "./dropbear-yam setup --reconfigure from this checkout",
+            "./dreamscale-yam setup --reconfigure from this checkout",
         )
     )
 
@@ -539,13 +539,13 @@ def doctor(rig: RigConfig, *, deps: DoctorDependencies | None = None) -> DoctorR
     except Exception as exc:
         cloud = CloudProbe(False, False, False, detail=str(exc))
     checks.append(
-        _pass("DBY-AUTH", "Dropbear authentication succeeded")
+        _pass("DBY-AUTH", "Dreamscale authentication succeeded")
         if cloud.authenticated
         else _fail(
             "DBY-AUTH",
-            "Dropbear login could not be verified"
+            "Dreamscale login could not be verified"
             + (f": {cloud.detail}" if cloud.detail else ""),
-            "Run ./dropbear-yam login, complete sign-in, then rerun ./dropbear-yam doctor",
+            "Run ./dreamscale-yam login, complete sign-in, then rerun ./dreamscale-yam doctor",
         )
     )
     checks.append(
@@ -553,9 +553,9 @@ def doctor(rig: RigConfig, *, deps: DoctorDependencies | None = None) -> DoctorR
         if cloud.entitled
         else _fail(
             "DBY-ENTITLEMENT",
-            "This Dropbear account cannot use dreamzero-yam"
+            "This Dreamscale account cannot use dreamzero-yam"
             + (f": {cloud.detail}" if cloud.detail else ""),
-            "Ask Dreamscale to grant this Dropbear account access to dreamzero-yam, then "
+            "Ask Dreamscale to grant this Dreamscale account access to dreamzero-yam, then "
             "rerun doctor",
         )
     )
@@ -567,14 +567,14 @@ def doctor(rig: RigConfig, *, deps: DoctorDependencies | None = None) -> DoctorR
             "No dreamzero-yam compute target is available"
             + (f": {cloud.detail}" if cloud.detail else ""),
             "Wait a few minutes and rerun doctor; if it still fails, send Dreamscale the output "
-            "of ./dropbear-yam doctor --json",
+            "of ./dreamscale-yam doctor --json",
         )
     )
     if cloud.sessions:
         checks.append(
             _fail(
                 "DBY-SESSION-CLEAR",
-                f"A Dropbear session is already running: {', '.join(cloud.sessions)}",
+                f"A Dreamscale session is already running: {', '.join(cloud.sessions)}",
                 "Do not start another run. Stop or resolve the listed session first, then rerun "
                 "doctor; doctor will not stop it automatically",
             )
@@ -585,7 +585,7 @@ def doctor(rig: RigConfig, *, deps: DoctorDependencies | None = None) -> DoctorR
                 "DBY-SESSION-CLEAR",
                 "More than one warm DreamZero-YAM reservation exists: "
                 f"{', '.join(cloud.parked_sessions)}",
-                "Stop the extra exact sessions with `dropbear sessions stop <session-id>`, then "
+                "Stop the extra exact sessions with `dreamscale sessions stop <session-id>`, then "
                 "rerun doctor",
             )
         )
@@ -597,7 +597,7 @@ def doctor(rig: RigConfig, *, deps: DoctorDependencies | None = None) -> DoctorR
             )
         )
     else:
-        checks.append(_pass("DBY-SESSION-CLEAR", "no existing Dropbear session"))
+        checks.append(_pass("DBY-SESSION-CLEAR", "no existing Dreamscale session"))
     return DoctorReport(tuple(checks))
 
 
@@ -623,7 +623,7 @@ def create_support_bundle(
 ) -> Path:
     """Create a credential-redacted bundle Jay or his agents can attach."""
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="dropbear-yam-support-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="dreamscale-yam-support-") as temporary:
         root = Path(temporary)
         (root / "doctor.json").write_text(report.to_json() + "\n", encoding="utf-8")
         (root / "rig.redacted.json").write_text(

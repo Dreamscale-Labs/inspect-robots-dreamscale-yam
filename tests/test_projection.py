@@ -8,8 +8,8 @@ import pytest
 from inspect_robots.errors import SafetyAbort
 from inspect_robots.types import Action
 
-from dropbear_yam.config import I2RT_JOINT_HIGH, I2RT_JOINT_LOW, STRICT_STEP_LIMITS
-from dropbear_yam.projection import ProjectionAudit, YamProjectionApprover
+from dreamscale_yam.config import I2RT_JOINT_HIGH, I2RT_JOINT_LOW, STRICT_STEP_LIMITS
+from dreamscale_yam.projection import ProjectionAudit, YamProjectionApprover
 
 
 def _approver(
@@ -31,16 +31,16 @@ def _approver(
 def test_arm_jump_is_capped_to_point_two_and_metadata_is_preserved() -> None:
     requested = np.zeros(14)
     requested[0] = 0.25
-    original = Action(requested, {"dropbear_action_source": "model", "epoch": 4})
+    original = Action(requested, {"dreamscale_action_source": "model", "epoch": 4})
 
     applied = _approver().review(original, {})
 
     assert applied is not original
     assert applied.data[0] == pytest.approx(0.2)
-    assert applied.meta["dropbear_action_source"] == "model"
+    assert applied.meta["dreamscale_action_source"] == "model"
     assert applied.meta["epoch"] == 4
     assert applied.meta["delta_clamped"] is True
-    assert applied.meta["dropbear_yam_projected"] is True
+    assert applied.meta["dreamscale_yam_projected"] is True
     assert "clamped" not in applied.meta
 
 

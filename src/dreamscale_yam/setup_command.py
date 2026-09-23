@@ -9,10 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from dropbear.config import load_config
-from dropbear.quickstart import run_login
+from dreamscale.config import load_config
+from dreamscale.quickstart import run_login
 
-from dropbear_yam.config import (
+from dreamscale_yam.config import (
     RigConfig,
     load_rig,
     migrate_generated_rig,
@@ -20,7 +20,7 @@ from dropbear_yam.config import (
     rig_profiles,
     save_rig,
 )
-from dropbear_yam.errors import UserFacingError
+from dreamscale_yam.errors import UserFacingError
 
 _USB_PORT = re.compile(r"(?:^|/)(\d+-\d+(?:\.\d+)*)(?=[:/]|$)")
 
@@ -345,7 +345,7 @@ def setup(
         load_rig(path)
         deps.output(f"Rig already confirmed: {path}")
         if not deps.authenticated():
-            deps.output("Dropbear credentials are absent; opening login.")
+            deps.output("Dreamscale credentials are absent; opening login.")
             deps.login()
         return path
 
@@ -434,6 +434,6 @@ def setup(
     saved = save_rig(rig, path=path, replace=reconfigure)
     deps.output(f"Confirmed rig written to {saved}")
     if not deps.authenticated():
-        deps.output("Dropbear credentials are absent; opening login.")
+        deps.output("Dreamscale credentials are absent; opening login.")
         deps.login()
     return saved

@@ -4,17 +4,17 @@ from pathlib import Path
 
 import pytest
 import tomli_w
-from dropbear import errors as dropbear_errors
+from dreamscale import errors as dreamscale_errors
 
-from dropbear_yam.config import load_rig
-from dropbear_yam.errors import UserFacingError
-from dropbear_yam.setup_command import SetupDependencies, _login, discover_cameras, setup
+from dreamscale_yam.config import load_rig
+from dreamscale_yam.errors import UserFacingError
+from dreamscale_yam.setup_command import SetupDependencies, _login, discover_cameras, setup
 
 
 def test_default_login_uses_the_locked_sdk_and_suppresses_generic_next_steps(monkeypatch) -> None:
     calls: list[bool] = []
     monkeypatch.setattr(
-        "dropbear_yam.setup_command.run_login",
+        "dreamscale_yam.setup_command.run_login",
         lambda *, print_next_steps: calls.append(print_next_steps),
     )
 
@@ -57,7 +57,7 @@ def test_setup_prompts_only_for_unavoidable_assignments_and_geometry(isolated_pa
     path = setup(deps=deps)
     rig = load_rig(path)
 
-    from dropbear_yam import config
+    from dreamscale_yam import config
 
     assert path == config.rig_path("default")
     assert (rig.top_camera, rig.left_camera, rig.right_camera) == (
@@ -74,7 +74,7 @@ def test_setup_prompts_only_for_unavoidable_assignments_and_geometry(isolated_pa
 def test_setup_reports_the_saved_rig_before_login_failure(isolated_paths: Path) -> None:
     answers = iter(["1", "2", "3", "1", "2", "n"])
     output: list[str] = []
-    failure = dropbear_errors.catalog("cli_login_start_failed", detail="HTTP 503")
+    failure = dreamscale_errors.catalog("cli_login_start_failed", detail="HTTP 503")
     deps = SetupDependencies(
         discover_cameras=lambda: [
             "/dev/v4l/by-id/cam-a",
@@ -88,7 +88,7 @@ def test_setup_reports_the_saved_rig_before_login_failure(isolated_paths: Path) 
         output=output.append,
     )
 
-    with pytest.raises(dropbear_errors.DropbearError):
+    with pytest.raises(dreamscale_errors.DreamscaleError):
         setup(deps=deps)
 
     assert load_rig().top_camera == "/dev/v4l/by-id/cam-a"
@@ -156,7 +156,7 @@ def test_setup_camera_failure_is_plain_and_actionable(isolated_paths: Path) -> N
 
 
 def test_setup_is_idempotent_and_does_not_prompt_when_rig_exists(rig, isolated_paths: Path) -> None:
-    from dropbear_yam.config import save_rig
+    from dreamscale_yam.config import save_rig
 
     expected = save_rig(rig, profile="jay-rig-1")
     deps = SetupDependencies(
@@ -173,7 +173,7 @@ def test_setup_is_idempotent_and_does_not_prompt_when_rig_exists(rig, isolated_p
 
 
 def test_setup_preserves_advanced_step_limits_without_prompting(rig, isolated_paths: Path) -> None:
-    from dropbear_yam.config import RigConfig, save_rig
+    from dreamscale_yam.config import RigConfig, save_rig
 
     configured = RigConfig(**{**rig.as_dict(), "step_limits": (0.5,) * 14})
     expected = save_rig(configured, profile="default")
@@ -191,7 +191,7 @@ def test_setup_preserves_advanced_step_limits_without_prompting(rig, isolated_pa
 
 
 def test_v0117_rig_parses_and_setup_does_not_rewrite_or_prompt(isolated_paths: Path) -> None:
-    from dropbear_yam import config
+    from dreamscale_yam import config
 
     fixture = Path(__file__).parent / "fixtures" / "v0.1.17-rig.toml"
     expected = fixture.read_bytes()
@@ -215,7 +215,7 @@ def test_v0117_rig_parses_and_setup_does_not_rewrite_or_prompt(isolated_paths: P
 def test_setup_migrates_generated_xml_bounds_without_reasking_for_rig_assignments(
     rig, isolated_paths: Path
 ) -> None:
-    from dropbear_yam import config
+    from dreamscale_yam import config
 
     path = config.rig_path("default")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -257,7 +257,7 @@ def test_setup_migrates_generated_xml_bounds_without_reasking_for_rig_assignment
 def test_setup_refuses_to_silently_migrate_a_customized_v1_rig(
     rig, isolated_paths: Path, customization: str
 ) -> None:
-    from dropbear_yam import config
+    from dreamscale_yam import config
 
     path = config.rig_path("default")
     path.parent.mkdir(parents=True, exist_ok=True)

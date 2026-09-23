@@ -30,19 +30,28 @@ _RIG_PROFILE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 
 
 def config_home() -> Path:
-    """Return the secret-free per-user config directory."""
-    override = os.environ.get("DROPBEAR_YAM_CONFIG_HOME")
+    """Return the secret-free per-user config directory.
+
+    A rig confirmed before the rename lives in ``~/.config/dropbear-yam``. While
+    ``~/.config/dreamscale-yam`` does not exist, that directory is used in place
+    (never copied), so an upgraded checkout keeps its confirmed rig.
+    """
+    override = os.environ.get("DREAMSCALE_YAM_CONFIG_HOME")
     if override:
         return Path(override).expanduser()
-    return Path.home() / ".config" / "dropbear-yam"
+    current = Path.home() / ".config" / "dreamscale-yam"
+    legacy = Path.home() / ".config" / "dropbear-yam"
+    if not current.exists() and legacy.is_dir():
+        return legacy
+    return current
 
 
 def state_home() -> Path:
     """Return the per-user mutable state directory."""
-    override = os.environ.get("DROPBEAR_YAM_STATE_HOME")
+    override = os.environ.get("DREAMSCALE_YAM_STATE_HOME")
     if override:
         return Path(override).expanduser()
-    return Path.home() / ".local" / "state" / "dropbear-yam"
+    return Path.home() / ".local" / "state" / "dreamscale-yam"
 
 
 def rig_path(profile: str | None = None) -> Path:
@@ -282,7 +291,9 @@ def load_rig(path: Path | None = None, *, profile: str | None = None) -> RigConf
     try:
         payload = tomllib.loads(resolved.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
-        raise FileNotFoundError(f"rig config missing: {resolved}; run dropbear-yam setup") from exc
+        raise FileNotFoundError(
+            f"rig config missing: {resolved}; run ./dreamscale-yam setup"
+        ) from exc
     raw = payload.get("rig")
     if not isinstance(raw, dict):
         raise ValueError(f"{resolved} has no [rig] table")
@@ -337,7 +348,7 @@ def migrate_generated_rig(path: Path) -> bool:
         or normalized_fixed != fixed_values
     ):
         raise ValueError(
-            f"{path} uses an unsupported rig format; run dropbear-yam setup --reconfigure"
+            f"{path} uses an unsupported rig format; run dreamscale-yam setup --reconfigure"
         )
     updated = {
         **raw,

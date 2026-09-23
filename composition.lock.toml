@@ -12,13 +12,12 @@ release = "v0.33.0+dreamscale.4"
 
 [components.adapter]
 package = "inspect-robots-dreamscale"
-repository = "https://github.com/Dreamscale-Labs/inspect-robots-dropbear.git"
-commit = "e5adcea777973c49e8866b72a36359c73c2785ee"
+repository = "https://github.com/Dreamscale-Labs/inspect-robots-dreamscale.git"
 version = "0.1.18"
 
 [components.dreamscale]
 package = "dreamscale"
-version = "0.1.0a25"
+version = "0.1.0a26"
 
 [components.inspect_robots]
 package = "inspect-robots"

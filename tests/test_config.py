@@ -207,17 +207,12 @@ def test_named_profile_cannot_escape_config_home(profile: str, isolated_paths: P
         config.rig_path(profile)
 
 
-def test_config_home_reads_a_pre_rename_rig_in_place(
+def test_config_home_is_the_dreamscale_directory(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Catch an upgraded checkout losing the rig confirmed before the rename."""
+    """Catch the runtime reading a pre-rename directory; setup.sh moves it once."""
     monkeypatch.delenv("DREAMSCALE_YAM_CONFIG_HOME", raising=False)
     monkeypatch.setattr(config.Path, "home", classmethod(lambda _cls: tmp_path))
-    legacy = tmp_path / ".config" / "dropbear-yam"
-    legacy.mkdir(parents=True)
+    (tmp_path / ".config" / "dropbear-yam").mkdir(parents=True)
 
-    assert config.config_home() == legacy
-
-    current = tmp_path / ".config" / "dreamscale-yam"
-    current.mkdir()
-    assert config.config_home() == current
+    assert config.config_home() == tmp_path / ".config" / "dreamscale-yam"

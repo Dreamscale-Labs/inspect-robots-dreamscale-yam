@@ -34,6 +34,23 @@ manual virtual environment activation is required.
 `stable` is the customer-facing release channel. Dreamscale fast-forwards it only after an
 immutable versioned release passes the local and Linux release gates.
 
+### Upgrading a rig set up before the rename
+
+This repository and its command were renamed to Dreamscale. On a computer that already has the
+older checkout, run from that checkout:
+
+```bash
+git remote set-url origin https://github.com/Dreamscale-Labs/inspect-robots-dreamscale-yam.git
+git pull --ff-only
+./setup.sh
+./dreamscale-yam doctor
+```
+
+`./setup.sh` moves the confirmed rig from `~/.config/dropbear-yam` to `~/.config/dreamscale-yam`,
+and local run state from `~/.local/state/dropbear-yam` to `~/.local/state/dreamscale-yam`, once. It
+never overwrites an existing Dreamscale directory, so the rig interview keeps your confirmed values.
+An existing sign-in keeps working. Use `./dreamscale-yam` from then on.
+
 `setup.sh` is safe to rerun. It installs missing Debian/Ubuntu build prerequisites only after one
 explicit sudo confirmation, installs `uv` when absent, reproduces `uv.lock`, and launches the rig
 interview. The first rig is automatically stored as `default`; Jay does not name it or

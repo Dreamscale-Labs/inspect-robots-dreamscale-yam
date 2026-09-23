@@ -30,20 +30,11 @@ _RIG_PROFILE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 
 
 def config_home() -> Path:
-    """Return the secret-free per-user config directory.
-
-    A rig confirmed before the rename lives in ``~/.config/dropbear-yam``. While
-    ``~/.config/dreamscale-yam`` does not exist, that directory is used in place
-    (never copied), so an upgraded checkout keeps its confirmed rig.
-    """
+    """Return the secret-free per-user config directory."""
     override = os.environ.get("DREAMSCALE_YAM_CONFIG_HOME")
     if override:
         return Path(override).expanduser()
-    current = Path.home() / ".config" / "dreamscale-yam"
-    legacy = Path.home() / ".config" / "dropbear-yam"
-    if not current.exists() and legacy.is_dir():
-        return legacy
-    return current
+    return Path.home() / ".config" / "dreamscale-yam"
 
 
 def state_home() -> Path:

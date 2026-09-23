@@ -124,3 +124,71 @@ def test_doctor_prints_action_for_warning_as_well_as_failure(monkeypatch, capsys
     output = capsys.readouterr().out
     assert "[WARN] DBY-GEOMETRY" in output
     assert "next: Run ./dreamscale-yam setup --reconfigure" in output
+
+
+def test_cameras_and_identify_can_are_customer_commands() -> None:
+    parser = _parser()
+
+    assert parser.parse_args(["cameras"]).command == "cameras"
+    parsed = parser.parse_args(["identify-can", "--rig", "jay-left"])
+    assert (parsed.command, parsed.rig) == ("identify-can", "jay-left")
+    assert parser.parse_args(["identify-can"]).rig is None
+
+
+def test_cli_dispatches_cameras_and_identify_can(monkeypatch) -> None:
+    calls: list[object] = []
+    monkeypatch.setattr("dreamscale_yam.cli.camera_preview_command", lambda: calls.append("c") or 0)
+    monkeypatch.setattr(
+        "dreamscale_yam.cli.identify_can", lambda *, rig_name: calls.append(rig_name)
+    )
+
+    assert main(["cameras"]) == 0
+    assert main(["identify-can", "--rig", "jay-left"]) == 0
+    assert calls == ["c", "jay-left"]
+
+
+def test_run_holds_the_rig_lock_so_identify_can_refuses(rig, isolated_paths, capsys) -> None:
+    from dreamscale_yam.config import save_rig
+    from dreamscale_yam.setup_command import SetupDependencies, identify_can
+
+    save_rig(rig, profile="default")
+    refused: list[str] = []
+
+    def fake_run(_instruction, _rig, **_kwargs):
+        try:
+            identify_can(
+                deps=SetupDependencies(
+                    discover_can=lambda: (_ for _ in ()).throw(AssertionError("discovered")),
+                    input=lambda _prompt: (_ for _ in ()).throw(AssertionError("prompted")),
+                    output=lambda _line: None,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - the refusal is the assertion
+            refused.append(str(exc))
+        return 0
+
+    import dreamscale_yam.cli as cli
+
+    original = cli.run
+    cli.run = fake_run
+    try:
+        assert main(["run", "Pack container"]) == 0
+    finally:
+        cli.run = original
+
+    assert len(refused) == 1
+    assert "is in use by another dreamscale-yam command (PID" in refused[0]
+    assert ": run)" in refused[0]
+
+
+def test_identify_can_refusal_is_plain_on_the_command_line(rig, isolated_paths, capsys) -> None:
+    from dreamscale_yam.config import rig_path, save_rig
+    from dreamscale_yam.rig_lock import hold_rig_locks
+
+    save_rig(rig, profile="default")
+    with hold_rig_locks([rig_path("default")], purpose="run"):
+        assert main(["identify-can"]) == 2
+
+    error = capsys.readouterr().err
+    assert "Error: The rig configured in" in error
+    assert "Next: Wait for that command to finish" in error

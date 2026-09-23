@@ -67,6 +67,7 @@ def explain_exception(exc: BaseException) -> tuple[str, str]:
             "camera role",
             "stable camera",
             "can role",
+            "can adapter identit",
             "[rig] table",
             "realsense camera source",
         )

@@ -23,6 +23,17 @@ def rig() -> RigConfig:
     )
 
 
+@pytest.fixture(autouse=True)
+def _never_touch_the_real_rig(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every test uses throwaway config and state, even when it forgets isolated_paths.
+
+    The suite also runs on real rigs, whose confirmed config and run state must
+    never be read or written by a test.
+    """
+    monkeypatch.setenv("DREAMSCALE_YAM_CONFIG_HOME", str(tmp_path / "hermetic-config"))
+    monkeypatch.setenv("DREAMSCALE_YAM_STATE_HOME", str(tmp_path / "hermetic-state"))
+
+
 @pytest.fixture
 def isolated_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     config = tmp_path / "config"

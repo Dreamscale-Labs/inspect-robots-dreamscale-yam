@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "inspect-robots-dreamscale-yam"
-version = "0.1.20"
+version = "0.1.21"
 description = "Attended DreamZero-YAM via Dreamscale for a bimanual I2RT YAM rig"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"

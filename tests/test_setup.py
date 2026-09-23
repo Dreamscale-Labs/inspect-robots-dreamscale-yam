@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pytest
@@ -402,3 +403,511 @@ def test_discovery_never_collapses_two_physical_cameras_with_a_duplicated_serial
         "/dev/v4l/by-path/pci-usb-1-2-video-index4",
         "/dev/v4l/by-path/pci-usb-1-3-video-index4",
     ]
+
+
+# -- v0.1.21: camera preview and CAN identity ---------------------------------
+
+from dreamscale_yam.camera_preview import CameraCandidate  # noqa: E402
+from dreamscale_yam.can_identity import CanAssignment, CanInterface  # noqa: E402
+from dreamscale_yam.config import rig_path, save_rig  # noqa: E402
+from dreamscale_yam.rig_lock import hold_rig_locks  # noqa: E402
+from dreamscale_yam.setup_command import (  # noqa: E402
+    camera_preview_command,
+    discover_camera_candidates,
+    identify_can,
+)
+
+CANDIDATES = [
+    CameraCandidate("/dev/v4l/by-id/d435-video-index0", "Intel RealSense D435", "146322072458"),
+    CameraCandidate("realsense:261022277065", "Intel RealSense D405", "261022277065"),
+    CameraCandidate("realsense:261022270000", "Intel RealSense D405", "261022270000"),
+]
+
+
+class FakePreview:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+        self.assigned: list[tuple[str, str]] = []
+        self.closed = 0
+
+    def assign(self, source: str, role: str) -> None:
+        self.assigned.append((source, role))
+        self.events.append(f"assign {role}")
+
+    def close(self, timeout_s: float = 20.0) -> bool:
+        self.closed += 1
+        self.events.append("preview closed")
+        return True
+
+
+def _interactive_deps(
+    monkeypatch: pytest.MonkeyPatch,
+    answers: list[str],
+    events: list[str],
+    output: list[str],
+    *,
+    preview: FakePreview | None = None,
+    preview_error: Exception | None = None,
+    assignment: CanAssignment | None = None,
+) -> SetupDependencies:
+    remaining = iter(answers)
+
+    def start_preview(candidates, out):
+        events.append(f"preview started with {len(candidates)}")
+        if preview_error is not None:
+            raise preview_error
+        return preview
+
+    class FakeIdentifier:
+        def __init__(self, _deps) -> None:
+            pass
+
+        def identify(self) -> CanAssignment:
+            events.append("can identified")
+            return assignment or CanAssignment(
+                "can_follower_l",
+                "can_follower_r",
+                "usb-serial:208137AD45465006",
+                "usb-serial:206437AA45465006",
+            )
+
+    monkeypatch.setattr("dreamscale_yam.setup_command.CanIdentifier", FakeIdentifier)
+    return SetupDependencies(
+        discover_cameras=lambda: list(CANDIDATES),
+        discover_can=lambda: ["can_follower_l", "can_follower_r"],
+        authenticated=lambda: True,
+        login=lambda: None,
+        input=lambda prompt: (events.append(f"ask {prompt.split(' [')[0]}"), next(remaining))[1],
+        output=output.append,
+        interactive=lambda: True,
+        start_preview=start_preview,
+    )
+
+
+def test_interactive_setup_previews_cameras_then_identifies_can_by_adapter(
+    isolated_paths: Path, monkeypatch
+) -> None:
+    events: list[str] = []
+    output: list[str] = []
+    preview = FakePreview(events)
+    deps = _interactive_deps(monkeypatch, ["1", "3", "2", "n"], events, output, preview=preview)
+
+    rig = load_rig(setup(deps=deps))
+
+    assert events == [
+        "preview started with 3",
+        "ask top camera",
+        "assign top",
+        "ask left camera",
+        "assign left",
+        "ask right camera",
+        "assign right",
+        "preview closed",
+        "can identified",
+        "ask Configure predictive collision geometry now?",
+    ]
+    assert preview.assigned == [
+        ("/dev/v4l/by-id/d435-video-index0", "top"),
+        ("realsense:261022270000", "left"),
+        ("realsense:261022277065", "right"),
+    ]
+    assert "  2. Intel RealSense D405 · serial 261022277065 · realsense:261022277065" in output
+    assert rig.schema_version == 3
+    assert (rig.left_channel, rig.left_can_id) == (
+        "can_follower_l",
+        "usb-serial:208137AD45465006",
+    )
+    assert rig.right_can_id == "usb-serial:206437AA45465006"
+    assert rig.top_camera == "/dev/v4l/by-id/d435-video-index0"
+
+
+def test_preview_failure_prints_one_line_and_the_list_still_works(
+    isolated_paths: Path, monkeypatch
+) -> None:
+    events: list[str] = []
+    output: list[str] = []
+    deps = _interactive_deps(
+        monkeypatch,
+        ["1", "2", "3", "n"],
+        events,
+        output,
+        preview_error=OSError("[Errno 98] Address already in use"),
+    )
+
+    rig = load_rig(setup(deps=deps))
+
+    assert (
+        "Camera preview is unavailable ([Errno 98] Address already in use); choose from the "
+        "list below."
+    ) in output
+    assert output.index(
+        "Camera preview is unavailable ([Errno 98] Address already in use); choose from the "
+        "list below."
+    ) < output.index("Assign top camera:")
+    assert rig.left_camera == "realsense:261022277065"
+
+
+def test_preview_is_closed_when_the_operator_presses_ctrl_c(
+    isolated_paths: Path, monkeypatch
+) -> None:
+    events: list[str] = []
+    preview = FakePreview(events)
+    deps = _interactive_deps(monkeypatch, [], events, [], preview=preview)
+    deps.input = lambda _prompt: (_ for _ in ()).throw(KeyboardInterrupt)
+
+    with pytest.raises(KeyboardInterrupt):
+        setup(deps=deps)
+
+    assert preview.closed == 1
+    assert "can identified" not in events
+    assert not rig_path("default").exists()
+
+
+def test_scripted_setup_has_no_preview_and_still_remembers_can_identity(
+    isolated_paths: Path,
+) -> None:
+    answers = iter(["1", "2", "3", "2", "1", "n"])
+    deps = SetupDependencies(
+        discover_cameras=lambda: list(CANDIDATES),
+        discover_can=lambda: ["can0", "can1"],
+        can_interfaces=lambda: {
+            "can0": CanInterface("can0", True, usb_serial="AAA", usb_port="1-2"),
+            "can1": CanInterface("can1", True, usb_port="1-3"),
+            "vcan0": CanInterface("vcan0", True),
+        },
+        authenticated=lambda: True,
+        login=lambda: None,
+        input=lambda _prompt: next(answers),
+        output=lambda _line: None,
+        start_preview=lambda *_args: (_ for _ in ()).throw(AssertionError("preview")),
+    )
+
+    rig = load_rig(setup(deps=deps))
+
+    assert (rig.left_channel, rig.right_channel) == ("can1", "can0")
+    assert (rig.left_can_id, rig.right_can_id) == ("usb-port:1-3", "usb-serial:AAA")
+
+
+def test_setup_refuses_while_a_run_holds_the_rig(rig, isolated_paths: Path) -> None:
+    path = save_rig(rig, profile="default")
+    deps = SetupDependencies(
+        discover_cameras=lambda: (_ for _ in ()).throw(AssertionError("discovered")),
+        input=lambda _prompt: (_ for _ in ()).throw(AssertionError("prompted")),
+        output=lambda _line: None,
+    )
+
+    with hold_rig_locks([path], purpose="run"):
+        with pytest.raises(UserFacingError, match="in use by another dreamscale-yam command"):
+            setup(reconfigure=True, deps=deps)
+
+
+def test_identify_can_updates_only_the_can_fields(
+    rig, isolated_paths: Path, monkeypatch
+) -> None:
+    from dreamscale_yam.config import RigConfig
+
+    configured = RigConfig(**{**rig.as_dict(), "step_limits": (0.3,) * 14})
+    path = save_rig(configured, profile="default")
+    events: list[str] = []
+    output: list[str] = []
+    deps = _interactive_deps(monkeypatch, [], events, output)
+
+    assert identify_can(deps=deps) == path
+
+    updated = load_rig(path)
+    assert (updated.left_channel, updated.right_channel) == ("can_follower_l", "can_follower_r")
+    assert updated.left_can_id == "usb-serial:208137AD45465006"
+    assert updated.schema_version == 3
+    unchanged = {
+        key: value
+        for key, value in updated.as_dict().items()
+        if key
+        not in {"left_channel", "right_channel", "left_can_id", "right_can_id", "schema_version"}
+    }
+    assert unchanged == {
+        key: value
+        for key, value in configured.as_dict().items()
+        if key not in {"left_channel", "right_channel", "schema_version"}
+    }
+    assert events == ["can identified"]
+    text = "\n".join(output)
+    assert "This updates only the left and right arm CAN adapters." in text
+    assert "Cameras, collision geometry and step limits were not changed." in text
+    assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_identify_can_needs_a_confirmed_rig(isolated_paths: Path) -> None:
+    with pytest.raises(UserFacingError, match="No confirmed rig exists"):
+        identify_can(deps=SetupDependencies(output=lambda _line: None))
+
+
+def test_camera_preview_command_runs_until_ctrl_c_and_closes(isolated_paths: Path) -> None:
+    events: list[str] = []
+    output: list[str] = []
+    preview = FakePreview(events)
+    deps = SetupDependencies(
+        discover_cameras=lambda: list(CANDIDATES),
+        output=output.append,
+        start_preview=lambda candidates, _out: preview,
+    )
+
+    def interrupt() -> None:
+        raise KeyboardInterrupt
+
+    assert camera_preview_command(deps=deps, wait=interrupt) == 0
+    assert preview.closed == 1
+    assert output[0] == "Detected cameras:"
+    assert "  1. Intel RealSense D435 · serial 146322072458 · by-id/d435-video-index0" in output
+    assert output[-1] == "Camera preview stopped; every camera is closed."
+    assert not rig_path("default").exists()
+
+
+def test_camera_preview_command_refuses_while_a_run_holds_a_rig(
+    rig, isolated_paths: Path
+) -> None:
+    path = save_rig(rig, profile="default")
+    deps = SetupDependencies(
+        discover_cameras=lambda: (_ for _ in ()).throw(AssertionError("discovered")),
+        output=lambda _line: None,
+    )
+
+    with hold_rig_locks([path], purpose="run"):
+        with pytest.raises(UserFacingError, match="in use"):
+            camera_preview_command(deps=deps, wait=lambda: None)
+
+
+def test_camera_preview_command_reports_an_unavailable_preview(isolated_paths: Path) -> None:
+    deps = SetupDependencies(
+        discover_cameras=lambda: list(CANDIDATES),
+        output=lambda _line: None,
+        start_preview=lambda *_args: (_ for _ in ()).throw(OSError("no free port")),
+    )
+
+    with pytest.raises(UserFacingError, match=r"Camera preview is unavailable \(no free port\)"):
+        camera_preview_command(deps=deps, wait=lambda: None)
+
+
+def test_candidates_carry_model_and_serial_for_the_menu(tmp_path: Path) -> None:
+    candidates = discover_camera_candidates(
+        v4l_devices=[
+            {
+                "source": "/dev/v4l/by-id/usb-Intel_435_ASIC1-video-index0",
+                "physical_id": "usb:2-1",
+                "model": "8086:0b07",
+                "serial": "ASIC1",
+                "product": "Intel(R) RealSense(TM) Depth Camera 435",
+                "usb_dir": "/sys/devices/usb2/2-1",
+            },
+            {
+                "source": "/dev/v4l/by-path/pci-usb-1-9-video-index0",
+                "physical_id": "usb:1-9",
+                "model": "046d:085e",
+                "serial": "",
+                "product": "Logitech BRIO",
+                "usb_dir": "/sys/devices/usb1/1-9",
+            },
+            {
+                "source": "/dev/v4l/by-path/pci-usb-3-1-video-index0",
+                "physical_id": "usb:3-1",
+                "model": "V4L2 camera",
+                "serial": "",
+            },
+        ],
+        realsense_devices=[
+            {
+                "source": "realsense:146322072458",
+                "physical_id": "usb:2-1",
+                "model": "Intel RealSense D435",
+                "serial": "146322072458",
+                "asic_serial": "ASIC1",
+            },
+            {
+                "source": "realsense:261022277065",
+                "physical_id": "usb:6-1.4",
+                "model": "Intel RealSense D405",
+                "serial": "261022277065",
+                "usb_dir": "/sys/devices/usb6/6-1.4",
+            },
+        ],
+    )
+
+    assert candidates == [
+        CameraCandidate(
+            "/dev/v4l/by-path/pci-usb-1-9-video-index0",
+            "Logitech BRIO",
+            "",
+            "/sys/devices/usb1/1-9",
+        ),
+        CameraCandidate(
+            "/dev/v4l/by-id/usb-Intel_435_ASIC1-video-index0",
+            "Intel RealSense D435",
+            "146322072458",
+            "/sys/devices/usb2/2-1",
+        ),
+        CameraCandidate("/dev/v4l/by-path/pci-usb-3-1-video-index0"),
+        CameraCandidate(
+            "realsense:261022277065",
+            "Intel RealSense D405",
+            "261022277065",
+            "/sys/devices/usb6/6-1.4",
+        ),
+    ]
+    assert [candidate.source for candidate in candidates] == discover_cameras(
+        v4l_devices=[
+            {"source": c.source, "physical_id": p, "model": "x"}
+            for c, p in ((candidates[0], "usb:1-9"), (candidates[2], "usb:3-1"))
+        ]
+        + [
+            {
+                "source": "/dev/v4l/by-id/usb-Intel_435_ASIC1-video-index0",
+                "physical_id": "usb:2-1",
+                "model": "8086:0b07",
+                "serial": "ASIC1",
+            }
+        ],
+        realsense_devices=[
+            {
+                "source": "realsense:146322072458",
+                "physical_id": "usb:2-1",
+                "model": "Intel RealSense D435",
+                "serial": "146322072458",
+                "asic_serial": "ASIC1",
+            },
+            {
+                "source": "realsense:261022277065",
+                "physical_id": "usb:6-1.4",
+                "model": "Intel RealSense D405",
+            },
+        ],
+    )
+
+
+def test_numbered_prompt_rejects_out_of_range_and_reused_answers() -> None:
+    from dreamscale_yam.prompts import select
+
+    output: list[str] = []
+    answers = iter(["0", "-1", "x", "9", "1", "2"])
+    used = {"b"}
+
+    assert (
+        select(
+            "left arm CAN",
+            ["b", "a"],
+            used,
+            input_fn=lambda _prompt: next(answers),
+            output=output.append,
+            labels={"a": "a · USB serial A"},
+        )
+        == "a"
+    )
+    assert output.count("Enter one listed number.") == 4
+    assert "That device is already assigned; choose another." in output
+    assert "  1. b (already assigned)" in output
+    assert "  2. a · USB serial A" in output
+    with pytest.raises(UserFacingError, match="no unused device"):
+        select("right arm CAN", ["a"], {"a"}, input_fn=input, output=output.append)
+
+
+def test_menu_names_come_from_usb_product_or_card_name(tmp_path: Path, monkeypatch) -> None:
+    from dreamscale_yam import setup_command
+
+    usb = tmp_path / "devices" / "usb2" / "2-1"
+    (usb / "2-1:1.0" / "video4linux" / "video4").mkdir(parents=True)
+    (usb / "idVendor").write_text("8086\n")
+    (usb / "product").write_text("Intel(R) RealSense(TM) Depth Camera 435 \n")
+    port = str(usb / "2-1:1.0" / "video4linux" / "video4")
+
+    assert setup_command._usb_product(str(usb), "/dev/video4") == (
+        "Intel(R) RealSense(TM) Depth Camera 435"
+    )
+    assert setup_command._usb_dir_from_port(port) == ""  # only real /sys paths are trusted
+    monkeypatch.setattr(
+        setup_command, "Path", lambda value: Path(str(value).replace("/sys", str(tmp_path), 1))
+    )
+    assert setup_command._usb_dir_from_port("/sys/devices/usb2/2-1/2-1:1.0/video4linux/video4")
+    assert setup_command._display_model(
+        [{"source": "/dev/v4l/by-id/x", "product": "Intel(R) RealSense(TM) Depth Camera 405"}]
+    ) == "Intel RealSense D405"
+    assert setup_command._display_model(
+        [{"source": "/dev/v4l/by-id/x", "model": "046d:085e"}]
+    ) == "USB camera 046d:085e"
+
+
+def test_a_second_ctrl_c_while_closing_still_closes_the_cameras() -> None:
+    from dreamscale_yam.setup_command import _close_preview
+
+    output: list[str] = []
+
+    class Interrupted:
+        calls = 0
+
+        def close(self, timeout_s: float = 20.0) -> bool:
+            self.calls += 1
+            if self.calls == 1:
+                raise KeyboardInterrupt
+            return False
+
+    preview = Interrupted()
+    _close_preview(preview, output.append)
+
+    assert preview.calls == 2
+    assert output == [
+        "Closing the cameras; one moment.",
+        "A preview camera is still closing; it will be released when setup exits.",
+    ]
+
+    class Stubborn:
+        def close(self, timeout_s: float = 20.0) -> bool:
+            raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        _close_preview(Stubborn(), output.append)
+
+    class Broken:
+        def close(self, timeout_s: float = 20.0) -> bool:
+            raise RuntimeError("server gone")
+
+    _close_preview(Broken(), output.append)
+    assert output[-1] == "The camera preview did not close cleanly (server gone)."
+
+
+@pytest.mark.parametrize("signame", ["SIGINT", "SIGTERM", "SIGHUP"])
+def test_preview_stops_cleanly_on_any_stop_signal_even_if_sigint_was_ignored(
+    signame: str,
+) -> None:
+    import os
+    import signal
+
+    from dreamscale_yam.setup_command import _stop_on_signals
+
+    signum = getattr(signal, signame)
+    before = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    original = signal.getsignal(signum)
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            with _stop_on_signals():
+                os.kill(os.getpid(), signum)
+                time.sleep(1)
+        assert signal.getsignal(signum) == original
+    finally:
+        signal.signal(signal.SIGINT, before)
+
+
+def test_camera_preview_command_closes_on_sigterm(isolated_paths: Path) -> None:
+    import os
+    import signal
+
+    events: list[str] = []
+    preview = FakePreview(events)
+    deps = SetupDependencies(
+        discover_cameras=lambda: list(CANDIDATES),
+        output=lambda _line: None,
+        start_preview=lambda candidates, _out: preview,
+    )
+
+    def terminated() -> None:
+        os.kill(os.getpid(), signal.SIGTERM)
+        time.sleep(1)
+
+    assert camera_preview_command(deps=deps, wait=terminated) == 0
+    assert preview.closed == 1
